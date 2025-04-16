@@ -8,7 +8,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install actionlint
-        run: GOBIN=$(pwd) go install github.com/rhysd/actionlint/cmd/actionlint@latest
+      - name: Cache actionlint binary
+        uses: actions/cache@v4
+        with:
+          path: ./actionlint
+          key: ${{ runner.os }}-actionlint-${{ hashFiles('**/actionlint') }}
+          restore-keys: |
+            ${{ runner.os }}-actionlint-
+      - name: Install actionlint if not cached
+        run: |
+          if [ ! -f ./actionlint ]; then
+            GOBIN=$(pwd) go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          fi
       - name: Run actionlint
         run: find .github/workflows -name "*.yml" ! -name "upgrade.yml" ! -name "build.yml" ! -name "pull-request-lint.yml" ! -name "upgrade.yml" -print0 | xargs -0 ./actionlint
