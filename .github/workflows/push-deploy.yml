@@ -1,0 +1,35 @@
+# mainブランチ以外へのPush時に走る処理
+name: push deploy branch
+
+on:
+  push:
+    branches:
+      - deploy
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # 最初にworkflowファイル全体をチェックする
+  check-workflows:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check-workflows.yml
+
+  # その後、デプロイする
+  # ただし、コミットメッセージに[No Deploy]が含まれている場合や
+  # dependabotが作成したPull Requestをマージしたときはデプロイしない
+  # ただしこのワークフローの実行にはGitHubリポジトリとAWS環境のOpen ID Connect等による接続が確立している必要がある
+  deploy:
+    needs: check-workflows
+    if: ${{ !contains(github.event.head_commit.message, '[No Deploy]') && !contains(toJson(github.event.commits.*.author.name), 'dependabot') }}
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
+    uses: ./.github/workflows/deploy.yml
