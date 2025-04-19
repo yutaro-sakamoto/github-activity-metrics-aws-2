@@ -8,21 +8,19 @@ import {
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as kinesisfirehose from "aws-cdk-lib/aws-kinesisfirehose";
-import * as s3 from "aws-cdk-lib/aws-s3";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
-import * as kinesis from "aws-cdk-lib/aws-kinesis";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as glue from "aws-cdk-lib/aws-glue";
 
 export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps = {}) {
     super(scope, id, props);
 
-    // S3バケット - GitHubデータの保存先
-    const dataBucket = new s3.Bucket(this, "GitHubDataBucket", {
-      removalPolicy: RemovalPolicy.RETAIN, // 本番環境ではデータ保持のため
+    // S3バケット - GitHub Webhookデータの保存先
+    const dataBucket = new s3.Bucket(this, "GitHubWebhookDataBucket", {
+      removalPolicy: RemovalPolicy.RETAIN, // 本番環境ではデータを保持
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       lifecycleRules: [
@@ -38,244 +36,9 @@ export class GitHubActivityMetricsStack extends Stack {
       ],
     });
 
-    // Athenaクエリ結果用のS3バケット
-    const athenaResultsBucket = new s3.Bucket(this, "AthenaResultsBucket", {
-      removalPolicy: RemovalPolicy.RETAIN,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [
-        {
-          expiration: Duration.days(30), // クエリ結果は30日後に削除
-        },
-      ],
-    });
-
-    // Glueデータベース（Athenaクエリ用）
-    new glue.CfnDatabase(this, "GitHubDatabase", {
-      catalogId: this.account,
-      databaseInput: {
-        name: "github_activity_db",
-        description: "Database for GitHub activity data",
-      },
-    });
-
-    // Kinesis Data Stream - リアルタイムデータ処理用
-    const dataStream = new kinesis.Stream(this, "GitHubActivityStream", {
-      streamName: "github-activity-stream",
-      shardCount: 1, // 初期シャード数（トラフィックに応じて調整可能）
-      retentionPeriod: Duration.hours(24),
-    });
-
-    // Lambda関数 - API Gateway Webhookハンドラー
-    const webhookHandler = new lambda.Function(this, "WebhookHandler", {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "index.handler",
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const kinesis = new AWS.Kinesis();
-        
-        exports.handler = async (event) => {
-          console.log('Received webhook event', { requestId: event.requestContext?.requestId });
-          
-          try {
-            // GitHubイベントタイプの取得
-            const githubEvent = event.headers['X-GitHub-Event'] || event.headers['x-github-event'];
-            const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-            
-            // パーティションキーの作成（リポジトリまたはランダム値）
-            const partitionKey = body.repository?.full_name || Math.random().toString(36).substring(2, 15);
-            
-            // Kinesisストリームにデータを送信
-            const params = {
-              StreamName: process.env.KINESIS_STREAM_NAME,
-              Data: JSON.stringify({
-                githubEvent,
-                headers: event.headers,
-                body: body,
-                receivedAt: new Date().toISOString()
-              }),
-              PartitionKey: partitionKey
-            };
-            
-            await kinesis.putRecord(params).promise();
-            
-            return {
-              statusCode: 200,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                message: 'Webhook received successfully',
-                eventType: githubEvent
-              })
-            };
-          } catch (error) {
-            console.error('Error processing webhook:', error);
-            
-            return {
-              statusCode: 500,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                message: 'Error processing webhook',
-                error: error.message 
-              })
-            };
-          }
-        };
-      `),
-      environment: {
-        KINESIS_STREAM_NAME: dataStream.streamName,
-      },
-      timeout: Duration.seconds(30),
-      memorySize: 256,
-    });
-
-    // Lambda関数にKinesisストリームへの書き込み権限を付与
-    dataStream.grantWrite(webhookHandler);
-
-    // API Gateway - GitHubのWebhookを受け取るためのエンドポイント
-    const api = new apigateway.RestApi(this, "GitHubWebhookApi", {
-      restApiName: "GitHub Webhook API",
-      description: "API Gateway for receiving GitHub webhooks",
-      deployOptions: {
-        stageName: "prod",
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
-      },
-    });
-
-    // WebhookハンドラーとAPI Gatewayを統合
-    const webhookIntegration = new apigateway.LambdaIntegration(webhookHandler);
-    api.root.addMethod("POST", webhookIntegration);
-
-    // Lambda関数 - データ変換処理
-    const dataTransformer = new lambda.Function(this, "DataTransformer", {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "index.handler",
-      code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          // Firehoseからのレコードを処理
-          const output = event.records.map(record => {
-            try {
-              // Base64でエンコードされたデータをデコード
-              const payload = Buffer.from(record.data, 'base64').toString('utf-8');
-              const parsedData = JSON.parse(payload);
-              
-              // GitHubイベント種別に特化した変換処理
-              const githubEvent = parsedData.githubEvent;
-              const body = parsedData.body;
-              
-              // イベントタイプに応じた変換ロジック
-              let transformedData;
-              switch (githubEvent) {
-                case 'push':
-                  transformedData = {
-                    event_type: githubEvent,
-                    repository: body.repository?.full_name,
-                    organization: body.organization?.login,
-                    sender: body.sender?.login,
-                    ref: body.ref,
-                    before: body.before,
-                    after: body.after,
-                    commits_count: body.commits?.length || 0,
-                    timestamp: parsedData.receivedAt,
-                  };
-                  break;
-                  
-                case 'pull_request':
-                  transformedData = {
-                    event_type: githubEvent,
-                    repository: body.repository?.full_name,
-                    organization: body.organization?.login,
-                    sender: body.sender?.login,
-                    action: body.action,
-                    pr_number: body.number,
-                    pr_title: body.pull_request?.title,
-                    pr_state: body.pull_request?.state,
-                    timestamp: parsedData.receivedAt,
-                  };
-                  break;
-                  
-                // 他のイベントタイプも必要に応じて追加
-                default:
-                  // デフォルトの変換ロジック - 共通フィールドを抽出
-                  transformedData = {
-                    event_type: githubEvent,
-                    repository: body.repository?.full_name,
-                    organization: body.organization?.login,
-                    sender: body.sender?.login,
-                    timestamp: parsedData.receivedAt,
-                    raw_payload: body, // 不明なイベントタイプの場合は生データを保持
-                  };
-              }
-              
-              // Base64エンコードして返す
-              return {
-                recordId: record.recordId,
-                result: 'Ok',
-                data: Buffer.from(JSON.stringify(transformedData)).toString('base64'),
-              };
-            } catch (error) {
-              console.error('Error processing record:', error);
-              // エラー時もレコードを保持（処理を継続）
-              return {
-                recordId: record.recordId,
-                result: 'ProcessingFailed',
-                data: record.data,
-              };
-            }
-          });
-          
-          return { records: output };
-        };
-      `),
-      timeout: Duration.minutes(2),
-      memorySize: 256,
-    });
-
-    // リアルタイム処理のためのLambda関数（オプション）
-    const streamProcessor = new lambda.Function(this, "StreamProcessor", {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "index.handler",
-      code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          console.log('Processing Kinesis records:', event.Records.length);
-          
-          // イベントレコードを処理
-          for (const record of event.Records) {
-            try {
-              // Base64でエンコードされたデータをデコード
-              const payload = Buffer.from(record.kinesis.data, 'base64').toString('utf-8');
-              const data = JSON.parse(payload);
-              
-              // ここでリアルタイム処理のロジックを実装
-              // 例: アラート送信、メトリクス集計、他のサービスへの通知など
-              console.log('Processing event:', data.githubEvent, 'for repo:', data.body.repository?.full_name);
-            } catch (error) {
-              console.error('Error processing Kinesis record:', error);
-            }
-          }
-          
-          return { processed: event.Records.length };
-        };
-      `),
-      timeout: Duration.minutes(1),
-      memorySize: 256,
-    });
-
-    // Kinesisストリームからのイベントソースマッピング（リアルタイム処理用）
-    new lambda.EventSourceMapping(this, "StreamProcessorEventSource", {
-      target: streamProcessor,
-      eventSourceArn: dataStream.streamArn,
-      startingPosition: lambda.StartingPosition.LATEST,
-      batchSize: 100,
-      maxBatchingWindow: Duration.seconds(30),
-      retryAttempts: 3,
-    });
-
-    // Kinesisストリームの読み取り権限をStreamProcessorに付与
-    dataStream.grantRead(streamProcessor);
-
     // Firehose用のロググループ
     const firehoseLogGroup = new logs.LogGroup(this, "FirehoseLogGroup", {
-      logGroupName: "/aws/kinesisfirehose/github-activity-delivery-stream",
+      logGroupName: "/aws/kinesisfirehose/github-webhook-delivery",
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -291,23 +54,13 @@ export class GitHubActivityMetricsStack extends Stack {
     // FirehoseにS3書き込み権限を付与
     dataBucket.grantWrite(firehoseRole);
 
-    // FirehoseにKinesis読み取り権限を付与
-    dataStream.grantRead(firehoseRole);
-
-    // FirehoseにLambda呼び出し権限を付与
-    dataTransformer.grantInvoke(firehoseRole);
-
     // Kinesis Data Firehose - データをS3に保存
-    const deliveryStream = new kinesisfirehose.CfnDeliveryStream(
+    const deliveryStream = new firehose.CfnDeliveryStream(
       this,
-      "GitHubActivityDeliveryStream",
+      "GitHubWebhookDeliveryStream",
       {
-        deliveryStreamName: "github-activity-delivery-stream",
-        deliveryStreamType: "KinesisStreamAsSource",
-        kinesisStreamSourceConfiguration: {
-          kinesisStreamArn: dataStream.streamArn,
-          roleArn: firehoseRole.roleArn,
-        },
+        deliveryStreamName: "github-webhook-delivery-stream",
+        deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: dataBucket.bucketArn,
           roleArn: firehoseRole.roleArn,
@@ -315,37 +68,11 @@ export class GitHubActivityMetricsStack extends Stack {
             intervalInSeconds: 60, // 1分ごとにバッファリング
             sizeInMBs: 5, // または5MBごと
           },
-          // イベントタイプと日付でパーティショニング
           prefix:
-            "github-events/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/",
+            "github-webhooks/event=!{partitionKeyFromQuery:event}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           errorOutputPrefix:
             "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
-          // データ変換用のLambda関数を指定
-          processingConfiguration: {
-            enabled: true,
-            processors: [
-              {
-                type: "Lambda",
-                parameters: [
-                  {
-                    parameterName: "LambdaArn",
-                    parameterValue: dataTransformer.functionArn,
-                  },
-                  {
-                    parameterName: "BufferSizeInMBs",
-                    parameterValue: "3",
-                  },
-                  {
-                    parameterName: "BufferIntervalInSeconds",
-                    parameterValue: "60",
-                  },
-                ],
-              },
-            ],
-          },
-          // 圧縮と形式の設定
           compressionFormat: "GZIP",
-          // CloudWatchログの設定
           cloudWatchLoggingOptions: {
             enabled: true,
             logGroupName: firehoseLogGroup.logGroupName,
@@ -355,30 +82,206 @@ export class GitHubActivityMetricsStack extends Stack {
       },
     );
 
+    // API GatewayからFirehoseへのプロキシ用のIAMロール
+    const apiGatewayRole = new iam.Role(this, "ApiGatewayFirehoseRole", {
+      assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+    });
+
+    // API GatewayにFirehoseへの書き込み権限を付与
+    apiGatewayRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["firehose:PutRecord", "firehose:PutRecordBatch"],
+        resources: [deliveryStream.attrArn],
+      }),
+    );
+
+    // REST API Gateway (GitHub Webhook用)
+    const api = new apigateway.RestApi(this, "GitHubWebhookApi", {
+      restApiName: "GitHub Webhook API",
+      description: "API for receiving GitHub webhooks",
+      deployOptions: {
+        stageName: "v1",
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+      },
+    });
+
+    // Lambda Authorizer - GitHubからのWebhookを認証
+    const webhookAuthorizer = new lambda.Function(this, "WebhookAuthorizer", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromInline(`
+        // GitHubからのWebhook認証Lambda
+        exports.handler = async (event) => {
+          console.log('Auth Event:', JSON.stringify(event));
+          
+          try {
+            // GitHub Webhookのシークレットトークンを検証
+            // 実際の実装では環境変数や AWS Secrets Manager からシークレットを取得
+            const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET;
+            
+            // X-Hub-Signature ヘッダーからの署名を検証
+            const signature = event.headers['X-Hub-Signature-256'] || event.headers['x-hub-signature-256'];
+            
+            if (!signature) {
+              console.log('Missing signature header');
+              return generatePolicy('user', 'Deny', event.methodArn);
+            }
+            
+            // 実際の実装では、リクエストボディとシークレットを使用して
+            // HMAC SHA-256 署名を計算し、GitHubから送信された署名と比較します
+            // このサンプルでは簡略化のため、特定の署名パターンをチェック
+            const isValid = signature.startsWith('sha256=') && signature.length > 50;
+            
+            if (!isValid) {
+              console.log('Invalid signature');
+              return generatePolicy('user', 'Deny', event.methodArn);
+            }
+            
+            // 検証OK
+            return generatePolicy('user', 'Allow', event.methodArn);
+          } catch (error) {
+            console.error('Authorization error:', error);
+            return generatePolicy('user', 'Deny', event.methodArn);
+          }
+        };
+        
+        // IAM ポリシードキュメントの生成ヘルパー関数
+        function generatePolicy(principalId, effect, resource) {
+          const authResponse = {
+            principalId: principalId,
+            policyDocument: {
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Action: 'execute-api:Invoke',
+                  Effect: effect,
+                  Resource: resource
+                }
+              ]
+            },
+            // オプション: コンテキスト情報をLambda統合に渡す
+            context: {
+              source: 'github-webhook',
+              timestamp: new Date().toISOString()
+            }
+          };
+          
+          return authResponse;
+        }
+      `),
+      environment: {
+        // 本番環境では AWS Secrets Manager などで管理することを推奨
+        GITHUB_WEBHOOK_SECRET: "your-github-webhook-secret-here",
+      },
+      timeout: Duration.seconds(10),
+    });
+
+    // API Gateway RequestAuthorizerを作成
+    const apiAuthorizer = new apigateway.RequestAuthorizer(
+      this,
+      "WebhookRequestAuthorizer",
+      {
+        handler: webhookAuthorizer,
+        identitySources: [
+          "method.request.header.X-Hub-Signature-256",
+          "method.request.header.X-GitHub-Event",
+          "method.request.header.X-GitHub-Delivery",
+        ],
+        resultsCacheTtl: Duration.seconds(0), // キャッシュなし（セキュリティのため）
+      },
+    );
+
+    // Webhooksリソースを作成
+    const webhooks = api.root.addResource("webhooks");
+
+    // AWS統合を使用してAPI GatewayとKinesis Data Firehoseを直接連携
+    const firehoseIntegration = new apigateway.AwsIntegration({
+      service: "firehose",
+      action: "PutRecord",
+      options: {
+        credentialsRole: apiGatewayRole,
+        requestTemplates: {
+          "application/json": `{
+            "DeliveryStreamName": "${deliveryStream.ref}",
+            "Record": {
+              "Data": "$util.base64Encode($input.body)"
+            }
+          }`,
+        },
+        integrationResponses: [
+          {
+            statusCode: "200",
+            responseTemplates: {
+              "application/json": `{
+                "message": "Webhook received successfully",
+                "deliveryStreamName": "${deliveryStream.ref}"
+              }`,
+            },
+          },
+          {
+            selectionPattern: "4\\d{2}",
+            statusCode: "400",
+            responseTemplates: {
+              "application/json": '{"message": "Bad request"}',
+            },
+          },
+          {
+            selectionPattern: "5\\d{2}",
+            statusCode: "500",
+            responseTemplates: {
+              "application/json": '{"message": "Internal server error"}',
+            },
+          },
+        ],
+      },
+    });
+
+    // POSTメソッドを追加して、Lambda AuthorizerとFirehose統合を設定
+    webhooks.addMethod("POST", firehoseIntegration, {
+      authorizer: apiAuthorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      requestParameters: {
+        "method.request.header.X-Hub-Signature-256": true,
+        "method.request.header.X-GitHub-Event": true,
+        "method.request.header.X-GitHub-Delivery": true,
+      },
+      methodResponses: [
+        {
+          statusCode: "200",
+          responseModels: {
+            "application/json": apigateway.Model.EMPTY_MODEL,
+          },
+        },
+        {
+          statusCode: "400",
+          responseModels: {
+            "application/json": apigateway.Model.ERROR_MODEL,
+          },
+        },
+        {
+          statusCode: "500",
+          responseModels: {
+            "application/json": apigateway.Model.ERROR_MODEL,
+          },
+        },
+      ],
+    });
+
     // 出力値
     new CfnOutput(this, "WebhookApiUrl", {
-      value: api.url,
+      value: `${api.url}webhooks`,
       description: "GitHub Webhookを設定するためのURL",
     });
 
-    new CfnOutput(this, "DataBucketName", {
+    new CfnOutput(this, "WebhookDataBucketName", {
       value: dataBucket.bucketName,
-      description: "GitHubイベントが保存されるS3バケット",
+      description: "GitHubのWebhookデータが保存されるS3バケット",
     });
 
-    new CfnOutput(this, "AthenaResultsBucketName", {
-      value: athenaResultsBucket.bucketName,
-      description: "Athenaクエリ結果が保存されるS3バケット",
-    });
-
-    new CfnOutput(this, "KinesisStreamName", {
-      value: dataStream.streamName,
-      description: "GitHubイベントを処理するKinesisストリーム",
-    });
-
-    new CfnOutput(this, "FirehoseStreamName", {
-      value: deliveryStream.deliveryStreamName!,
-      description: "GitHubイベントをS3に配信するFirehoseストリーム",
+    new CfnOutput(this, "FirehoseDeliveryStreamName", {
+      value: deliveryStream.ref,
+      description: "Webhook データを処理するKinesis Data Firehoseストリーム",
     });
   }
 }
