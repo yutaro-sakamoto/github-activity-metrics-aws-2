@@ -31,5 +31,8 @@ jobs:
           node-version: "22"
           cache: "npm"
 
+      - name: Install dependencies
+        run: yarn install
+
       - name: deploy
         run: npx cdk deploy
