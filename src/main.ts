@@ -68,8 +68,9 @@ export class GitHubActivityMetricsStack extends Stack {
             intervalInSeconds: 60, // 1分ごとにバッファリング
             sizeInMBs: 5, // または5MBごと
           },
+          // 動的パーティショニングを使わない標準的なプレフィックス
           prefix:
-            "github-webhooks/event=!{partitionKeyFromQuery:event}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
+            "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           errorOutputPrefix:
             "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           compressionFormat: "GZIP",
