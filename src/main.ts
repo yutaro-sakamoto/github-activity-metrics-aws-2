@@ -5,6 +5,7 @@ import {
   RemovalPolicy,
   Duration,
   CfnOutput,
+  Aspects,
 } from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -13,16 +14,28 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
+import { AwsSolutionsChecks, NagSuppressions } from "cdk-nag";
 
 export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps = {}) {
     super(scope, id, props);
 
     // S3バケット - GitHub Webhookデータの保存先
+    const accessLogsBucket = new s3.Bucket(this, "AccessLogsBucket", {
+      removalPolicy: RemovalPolicy.RETAIN,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true, // SSL接続を強制
+    });
+
+    // S3バケット - GitHub Webhookデータの保存先
     const dataBucket = new s3.Bucket(this, "GitHubWebhookDataBucket", {
       removalPolicy: RemovalPolicy.RETAIN, // 本番環境ではデータを保持
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true, // SSL接続を強制
+      serverAccessLogsBucket: accessLogsBucket, // アクセスログを有効化
+      serverAccessLogsPrefix: "github-webhook-data-access-logs/",
       lifecycleRules: [
         {
           enabled: true,
@@ -61,6 +74,10 @@ export class GitHubActivityMetricsStack extends Stack {
       {
         deliveryStreamName: "github-webhook-delivery-stream",
         deliveryStreamType: "DirectPut",
+        // サーバーサイド暗号化を有効化
+        deliveryStreamEncryptionConfigurationInput: {
+          keyType: "AWS_OWNED_CMK",
+        },
         extendedS3DestinationConfiguration: {
           bucketArn: dataBucket.bucketArn,
           roleArn: firehoseRole.roleArn,
@@ -96,6 +113,25 @@ export class GitHubActivityMetricsStack extends Stack {
       }),
     );
 
+    // API Gatewayのアクセスログバケットとロググループを作成
+    const ApiGatewayAccessLogsBucket = new s3.Bucket(
+      this,
+      "ApiGatewayAccessLogsBucket",
+      {
+        removalPolicy: RemovalPolicy.RETAIN,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+      },
+    );
+
+    NagSuppressions.addResourceSuppressions(ApiGatewayAccessLogsBucket, [
+      {
+        id: "AwsSolutions-S1",
+        reason: "アクセスログバケットに対するアクセスログは有効化しない",
+      },
+    ]);
+
     // REST API Gateway (GitHub Webhook用)
     const api = new apigateway.RestApi(this, "GitHubWebhookApi", {
       restApiName: "GitHub Webhook API",
@@ -104,6 +140,13 @@ export class GitHubActivityMetricsStack extends Stack {
         stageName: "v1",
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
+        // アクセスログを有効化
+        accessLogDestination: new apigateway.LogGroupLogDestination(
+          new logs.LogGroup(this, "ApiGatewayAccessLogs", {
+            retention: logs.RetentionDays.ONE_MONTH,
+          }),
+        ),
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       },
     });
 
@@ -295,9 +338,45 @@ const devEnv = {
 
 const app = new App();
 
-new GitHubActivityMetricsStack(app, "github-activity-metrics-aws-dev", {
-  env: devEnv,
-});
-// new GitHubActivityMetricsStack(app, 'github-activity-metrics-aws-prod', { env: prodEnv });
+const stack = new GitHubActivityMetricsStack(
+  app,
+  "github-activity-metrics-aws-dev",
+  {
+    env: devEnv,
+  },
+);
+
+// CDK Nagのセキュリティチェックをアプリケーションに適用
+Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
+
+// 特定の警告を抑制する場合は以下のように設定
+NagSuppressions.addStackSuppressions(
+  stack,
+  [
+    {
+      id: "AwsSolutions-IAM4",
+      reason: "マネージドポリシーはプロトタイプ段階では許容します",
+    },
+    {
+      id: "AwsSolutions-IAM5",
+      reason: "Firehoseサービスロールは限定的な権限を持ちます",
+    },
+    {
+      id: "AwsSolutions-L1",
+      reason: "デモ用のLambda関数はインラインコードを使用しています",
+    },
+    {
+      id: "AwsSolutions-APIG2",
+      reason:
+        "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambdaオーソライザーで実装しています",
+    },
+    {
+      id: "AwsSolutions-COG4",
+      reason:
+        "GitHubのWebhookではCognitoユーザープールの代わりにカスタムのLambdaオーソライザーを使用しています",
+    },
+  ],
+  true,
+);
 
 app.synth();
