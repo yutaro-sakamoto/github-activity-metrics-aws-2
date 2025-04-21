@@ -2,11 +2,11 @@ import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
 import * as crypto from "crypto";
 
-// AWS SDKクライアントの初期化
+// Initialize AWS SDK clients
 const ssmClient = new SSMClient();
 const firehoseClient = new FirehoseClient();
 
-// SSMパラメータストアからシークレットを取得する関数
+// Function to retrieve secret from SSM Parameter Store
 async function getSecretFromParameterStore(
   parameterName: string,
 ): Promise<string> {
@@ -25,26 +25,26 @@ async function getSecretFromParameterStore(
   }
 }
 
-// GitHubのシグネチャを検証する関数
+// Function to verify GitHub signature
 function verifySignature(
   payload: string,
   signature: string,
   secret: string,
 ): boolean {
   try {
-    // X-Hub-Signature-256があるか確認
+    // Check if X-Hub-Signature-256 exists
     if (!signature || !signature.startsWith("sha256=")) {
       return false;
     }
 
-    // シグネチャをパース
-    const signatureHash = signature.substring(7); // 'sha256=' を除去
+    // Parse signature
+    const signatureHash = signature.substring(7); // Remove 'sha256='
 
-    // 期待されるシグネチャを計算
+    // Calculate expected signature
     const hmac = crypto.createHmac("sha256", secret);
     const calculatedSignature = hmac.update(payload).digest("hex");
 
-    // タイミング攻撃を防ぐための比較
+    // Compare using timing-safe comparison to prevent timing attacks
     return crypto.timingSafeEqual(
       Buffer.from(signatureHash, "hex"),
       Buffer.from(calculatedSignature, "hex"),
@@ -55,7 +55,7 @@ function verifySignature(
   }
 }
 
-// Firehoseにデータを送信する関数
+// Function to send data to Firehose
 async function sendToFirehose(data: any, deliveryStreamName: string) {
   const params = {
     DeliveryStreamName: deliveryStreamName,
@@ -74,23 +74,23 @@ async function sendToFirehose(data: any, deliveryStreamName: string) {
   }
 }
 
-// Lambda関数のメインハンドラー
+// Main Lambda function handler
 export const handler = async (event: any) => {
   console.log("Received webhook event");
 
   try {
-    // リクエストボディとヘッダーの取得
+    // Get request body and headers
     const body = event.body;
     const headers = event.headers || {};
 
-    // GitHubのイベントタイプとdelivery IDを取得
+    // Get GitHub event type and delivery ID
     const githubEvent = headers["X-GitHub-Event"] || headers["x-github-event"];
     const githubDelivery =
       headers["X-GitHub-Delivery"] || headers["x-github-delivery"];
     const signature =
       headers["X-Hub-Signature-256"] || headers["x-hub-signature-256"];
 
-    // リクエストボディが存在するかチェック
+    // Check if request body exists
     if (!body) {
       console.error("No request body found");
       return {
@@ -99,12 +99,12 @@ export const handler = async (event: any) => {
       };
     }
 
-    // SSMパラメータストアからシークレットを取得
+    // Get secret from SSM Parameter Store
     const secretToken = await getSecretFromParameterStore(
       "/github/metrics/secret-token",
     );
 
-    // GitHub webhookシグネチャを検証
+    // Verify GitHub webhook signature
     const isValid = verifySignature(
       typeof body === "string" ? body : JSON.stringify(body),
       signature,
@@ -119,10 +119,10 @@ export const handler = async (event: any) => {
       };
     }
 
-    // リクエストボディをパース（必要に応じて）
+    // Parse request body (if necessary)
     const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
 
-    // Firehoseに送信するデータを準備
+    // Prepare data to send to Firehose
     const data = {
       event_type: githubEvent,
       delivery_id: githubDelivery,
@@ -133,13 +133,13 @@ export const handler = async (event: any) => {
       payload: parsedBody,
     };
 
-    // Firehoseにデータを送信
+    // Send data to Firehose
     const result = await sendToFirehose(
       data,
       process.env.DELIVERY_STREAM_NAME!,
     );
 
-    // 成功レスポンスを返す
+    // Return success response
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -149,10 +149,10 @@ export const handler = async (event: any) => {
       }),
     };
   } catch (error: any) {
-    // エラーログを出力
+    // Log error
     console.error("Error processing webhook:", error);
 
-    // エラーレスポンスを返す
+    // Return error response
     return {
       statusCode: 500,
       body: JSON.stringify({

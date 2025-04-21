@@ -7,7 +7,7 @@ import { NagSuppressions } from "cdk-nag";
 
 export interface ApiProps {
   /**
-   * GitHubのWebhook処理Lambda
+   * Lambda function for processing GitHub webhooks
    */
   webhookHandler: lambda.NodejsFunction;
 }
@@ -19,7 +19,7 @@ export class Api extends Construct {
   public readonly api: apigateway.RestApi;
 
   /**
-   * Webhookエンドポイントの完全なURL
+   * Complete URL for the webhook endpoint
    */
   public readonly webhookUrl: string;
 
@@ -28,7 +28,7 @@ export class Api extends Construct {
 
     const { webhookHandler } = props;
 
-    // API Gatewayのアクセスログバケットとロググループを作成
+    // Create access log bucket and log group for API Gateway
     const apiGatewayAccessLogsBucket = new s3.Bucket(
       this,
       "ApiGatewayAccessLogsBucket",
@@ -39,20 +39,20 @@ export class Api extends Construct {
       },
     );
 
-    // アクセスログバケットのCDK Nag抑制設定
+    // CDK Nag suppression settings for access log bucket
     NagSuppressions.addResourceSuppressions(apiGatewayAccessLogsBucket, [
       {
         id: "AwsSolutions-S1",
-        reason: "アクセスログバケットに対するアクセスログは有効化しない",
+        reason: "Access logs are not enabled for the access logs bucket",
       },
     ]);
 
-    // API GatewayアクセスログのためのCloudWatchロググループ
+    // CloudWatch log group for API Gateway access logs
     const apiGatewayLogGroup = new logs.LogGroup(this, "ApiGatewayAccessLogs", {
       retention: logs.RetentionDays.ONE_MONTH,
     });
 
-    // REST API Gateway (GitHub Webhook用)
+    // REST API Gateway (for GitHub Webhooks)
     this.api = new apigateway.RestApi(this, "GitHubWebhookApi", {
       restApiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
@@ -60,7 +60,7 @@ export class Api extends Construct {
         stageName: "v1",
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
-        // アクセスログを有効化
+        // Enable access logs
         accessLogDestination: new apigateway.LogGroupLogDestination(
           apiGatewayLogGroup,
         ),
@@ -68,13 +68,13 @@ export class Api extends Construct {
       },
     });
 
-    // Webhooksリソースを作成
+    // Create webhooks resource
     const webhooks = this.api.root.addResource("webhooks");
 
-    // Lambda統合を作成 - GitHubのWebhookを処理
+    // Create Lambda integration - Process GitHub webhooks
     const webhookIntegration = new apigateway.LambdaIntegration(webhookHandler);
 
-    // POSTメソッドを追加
+    // Add POST method
     webhooks.addMethod("POST", webhookIntegration, {
       requestParameters: {
         "method.request.header.X-GitHub-Event": true,
@@ -109,7 +109,7 @@ export class Api extends Construct {
       ],
     });
 
-    // Webhook URLを保存
+    // Store webhook URL
     this.webhookUrl = `${this.api.url}webhooks`;
   }
 }

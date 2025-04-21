@@ -2,22 +2,22 @@ import { App, Aspects } from "aws-cdk-lib";
 import { AwsSolutionsChecks } from "cdk-nag";
 import { GitHubActivityMetricsStack } from "./stacks/github-activity-metrics-stack";
 
-// デプロイ環境の設定 - CDK CLIから環境情報を取得
+// Configure deployment environment - Get environment information from CDK CLI
 const devEnv = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-// CDKアプリケーションを初期化
+// Initialize CDK application
 const app = new App();
 
-// GitHub Activity Metricsスタックを作成
+// Create GitHub Activity Metrics stack
 new GitHubActivityMetricsStack(app, "github-activity-metrics-aws-dev", {
   env: devEnv,
 });
 
-// CDK Nagのセキュリティチェックをアプリケーションに適用
+// Apply CDK Nag security checks to the application
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
 
-// アプリケーションの合成
+// Synthesize the application
 app.synth();

@@ -8,33 +8,33 @@ import { NagSuppressions } from "cdk-nag";
 
 export class Storage extends Construct {
   /**
-   * GitHubのWebhookデータを格納するS3バケット
+   * S3 bucket that stores GitHub webhook data
    */
   public readonly dataBucket: s3.Bucket;
 
   /**
-   * Firehose配信ストリーム
+   * Firehose delivery stream
    */
   public readonly deliveryStream: firehose.CfnDeliveryStream;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // S3バケット - アクセスログ用
+    // S3 bucket - for access logs
     const accessLogsBucket = new s3.Bucket(this, "AccessLogsBucket", {
       removalPolicy: RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true, // SSL接続を強制
+      enforceSSL: true, // Enforce SSL connections
     });
 
-    // S3バケット - GitHub Webhookデータの保存先
+    // S3 bucket - Destination for GitHub webhook data
     this.dataBucket = new s3.Bucket(this, "GitHubWebhookDataBucket", {
-      removalPolicy: RemovalPolicy.RETAIN, // 本番環境ではデータを保持
+      removalPolicy: RemovalPolicy.RETAIN, // Retain data in production environment
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true, // SSL接続を強制
-      serverAccessLogsBucket: accessLogsBucket, // アクセスログを有効化
+      enforceSSL: true, // Enforce SSL connections
+      serverAccessLogsBucket: accessLogsBucket, // Enable access logs
       serverAccessLogsPrefix: "github-webhook-data-access-logs/",
       lifecycleRules: [
         {
@@ -49,32 +49,32 @@ export class Storage extends Construct {
       ],
     });
 
-    // Firehose用のロググループ
+    // Log group for Firehose
     const firehoseLogGroup = new logs.LogGroup(this, "FirehoseLogGroup", {
       logGroupName: "/aws/kinesisfirehose/github-webhook-delivery",
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // Firehose用のIAMロール
+    // IAM role for Firehose
     const firehoseRole = new iam.Role(this, "FirehoseRole", {
       assumedBy: new iam.ServicePrincipal("firehose.amazonaws.com"),
     });
 
-    // Firehoseにログ書き込み権限を付与
+    // Grant log writing permissions to Firehose
     firehoseLogGroup.grantWrite(firehoseRole);
 
-    // FirehoseにS3書き込み権限を付与
+    // Grant S3 writing permissions to Firehose
     this.dataBucket.grantWrite(firehoseRole);
 
-    // Kinesis Data Firehose - データをS3に保存
+    // Kinesis Data Firehose - Save data to S3
     this.deliveryStream = new firehose.CfnDeliveryStream(
       this,
       "GitHubWebhookDeliveryStream",
       {
         deliveryStreamName: "github-webhook-delivery-stream",
         deliveryStreamType: "DirectPut",
-        // サーバーサイド暗号化を有効化
+        // Enable server-side encryption
         deliveryStreamEncryptionConfigurationInput: {
           keyType: "AWS_OWNED_CMK",
         },
@@ -82,10 +82,10 @@ export class Storage extends Construct {
           bucketArn: this.dataBucket.bucketArn,
           roleArn: firehoseRole.roleArn,
           bufferingHints: {
-            intervalInSeconds: 60, // 1分ごとにバッファリング
-            sizeInMBs: 5, // または5MBごと
+            intervalInSeconds: 60, // Buffer every 1 minute
+            sizeInMBs: 5, // Or every 5MB
           },
-          // 動的パーティショニングを使わない標準的なプレフィックス
+          // Standard prefix without dynamic partitioning
           prefix:
             "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           errorOutputPrefix:
@@ -100,12 +100,12 @@ export class Storage extends Construct {
       },
     );
 
-    // アクセスログバケットのCDK Nag抑制設定
+    // CDK Nag suppression settings for access log bucket
     NagSuppressions.addResourceSuppressions(accessLogsBucket, [
       {
         id: "AwsSolutions-S1",
         reason:
-          "アクセスログバケットに対するアクセスログは有効化しない（無限ループ防止）",
+          "Access logs are not enabled for the access logs bucket (prevents infinite loop)",
       },
     ]);
   }

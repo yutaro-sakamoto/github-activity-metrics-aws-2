@@ -14,21 +14,21 @@ export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
 
-    // ストレージリソース（S3バケット、Kinesis Firehose）の作成
+    // Create storage resources (S3 bucket, Kinesis Firehose)
     const storage = new Storage(this, "Storage");
 
-    // SSMパラメータからGitHub Webhookのシークレットを参照
+    // Reference GitHub Webhook secret from SSM Parameter Store
     const webhookSecretParam =
       ssm.StringParameter.fromSecureStringParameterAttributes(
         this,
         "GitHubWebhookSecret",
         {
           parameterName: "/github/metrics/secret-token",
-          version: 1, // 特定のバージョンを指定するか、未指定で最新を使用
+          version: 1, // Specify a specific version or use the latest if unspecified
         },
       );
 
-    // Lambda関数 - GitHubのWebhookを検証して、Firehoseにデータを送信する
+    // Lambda function - Validates GitHub webhooks and sends data to Firehose
     const webhookHandler = new NodejsFunction(this, "WebhookHandler", {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: "handler",
@@ -42,15 +42,15 @@ export class GitHubActivityMetricsStack extends Stack {
         minify: true,
         sourceMap: true,
         externalModules: ["aws-sdk"],
-        // AWS SDK v3は必要なものだけをバンドルする
+        // Bundle only the required AWS SDK v3 modules
         nodeModules: ["@aws-sdk/client-ssm", "@aws-sdk/client-firehose"],
       },
     });
 
-    // Lambda関数にSSMパラメータ読み取り権限を付与
+    // Grant SSM parameter read permission to the Lambda function
     webhookSecretParam.grantRead(webhookHandler);
 
-    // Lambda関数にFirehoseへの書き込み権限を付与
+    // Grant Firehose write permissions to the Lambda function
     webhookHandler.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["firehose:PutRecord", "firehose:PutRecordBatch"],
@@ -63,28 +63,28 @@ export class GitHubActivityMetricsStack extends Stack {
       webhookHandler,
     });
 
-    // 出力値
+    // Output values
     new CfnOutput(this, "WebhookApiUrl", {
       value: api.webhookUrl,
-      description: "GitHub Webhookを設定するためのURL",
+      description: "URL for configuring GitHub Webhook",
     });
 
     new CfnOutput(this, "WebhookDataBucketName", {
       value: storage.dataBucket.bucketName,
-      description: "GitHubのWebhookデータが保存されるS3バケット",
+      description: "S3 bucket where GitHub webhook data is stored",
     });
 
     new CfnOutput(this, "FirehoseDeliveryStreamName", {
       value: storage.deliveryStream.ref,
-      description: "Webhook データを処理するKinesis Data Firehoseストリーム",
+      description: "Kinesis Data Firehose stream that processes webhook data",
     });
 
-    // CDK Nag抑制の設定
+    // Configure CDK Nag suppressions
     this.setupNagSuppressions();
   }
 
   /**
-   * CDK Nagの警告抑制を設定
+   * Configure CDK Nag warning suppressions
    */
   private setupNagSuppressions() {
     NagSuppressions.addResourceSuppressionsByPath(
@@ -97,7 +97,7 @@ export class GitHubActivityMetricsStack extends Stack {
         {
           id: "AwsSolutions-IAM5",
           reason:
-            "Firehoseサービスロールと Lambda ロールは限定的な権限を持ちます",
+            "Firehose service role and Lambda role have limited permissions",
         },
       ],
       true,
@@ -108,26 +108,26 @@ export class GitHubActivityMetricsStack extends Stack {
       [
         {
           id: "AwsSolutions-IAM4",
-          reason: "マネージドポリシーはプロトタイプ段階では許容します",
+          reason: "Managed policies are acceptable during the prototype phase",
         },
         {
           id: "AwsSolutions-L1",
-          reason: "デモ用のLambda関数はインラインコードを使用しています",
+          reason: "Demo Lambda functions use inline code",
         },
         {
           id: "AwsSolutions-APIG2",
           reason:
-            "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambda統合で実装しています",
+            "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
         },
         {
           id: "AwsSolutions-APIG4",
           reason:
-            "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambda統合で実装しています",
+            "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
         },
         {
           id: "AwsSolutions-COG4",
           reason:
-            "GitHubのWebhookではCognitoユーザープールの代わりにカスタムのLambda統合を使用しています",
+            "GitHub webhooks use custom Lambda integration instead of Cognito user pools",
         },
       ],
       true,
