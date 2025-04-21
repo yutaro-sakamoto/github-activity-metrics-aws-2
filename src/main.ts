@@ -13,6 +13,7 @@ import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import { Construct } from "constructs";
 import { AwsSolutionsChecks, NagSuppressions } from "cdk-nag";
 
@@ -100,21 +101,8 @@ export class GitHubActivityMetricsStack extends Stack {
       },
     );
 
-    // API GatewayからFirehoseへのプロキシ用のIAMロール
-    const apiGatewayRole = new iam.Role(this, "ApiGatewayFirehoseRole", {
-      assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-    });
-
-    // API GatewayにFirehoseへの書き込み権限を付与
-    apiGatewayRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["firehose:PutRecord", "firehose:PutRecordBatch"],
-        resources: [deliveryStream.attrArn],
-      }),
-    );
-
     // API Gatewayのアクセスログバケットとロググループを作成
-    const ApiGatewayAccessLogsBucket = new s3.Bucket(
+    const apiGatewayAccessLogsBucket = new s3.Bucket(
       this,
       "ApiGatewayAccessLogsBucket",
       {
@@ -125,7 +113,7 @@ export class GitHubActivityMetricsStack extends Stack {
       },
     );
 
-    NagSuppressions.addResourceSuppressions(ApiGatewayAccessLogsBucket, [
+    NagSuppressions.addResourceSuppressions(apiGatewayAccessLogsBucket, [
       {
         id: "AwsSolutions-S1",
         reason: "アクセスログバケットに対するアクセスログは有効化しない",
@@ -150,145 +138,200 @@ export class GitHubActivityMetricsStack extends Stack {
       },
     });
 
-    // Lambda Authorizer - GitHubからのWebhookを認証
-    const webhookAuthorizer = new lambda.Function(this, "WebhookAuthorizer", {
-      runtime: lambda.Runtime.NODEJS_18_X,
+    // SSMパラメータからGitHub Webhookのシークレットを参照
+    const webhookSecretParam =
+      ssm.StringParameter.fromSecureStringParameterAttributes(
+        this,
+        "GitHubWebhookSecret",
+        {
+          parameterName: "/github/metrics/secret-token",
+          version: 1, // 特定のバージョンを指定するか、未指定で最新を使用
+        },
+      );
+
+    // Lambda関数 - GitHubのWebhookを検証して、Firehoseにデータを送信する
+    const webhookHandler = new lambda.Function(this, "WebhookHandler", {
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
       code: lambda.Code.fromInline(`
-        // GitHubからのWebhook認証Lambda
-        exports.handler = async (event) => {
-          console.log('Auth Event:', JSON.stringify(event));
+        const AWS = require('aws-sdk');
+        const crypto = require('crypto');
+        
+        const ssm = new AWS.SSM();
+        const firehose = new AWS.Firehose();
+        
+        // SSMパラメータストアからシークレットを取得する関数
+        async function getSecretFromParameterStore(parameterName) {
+          const params = {
+            Name: parameterName,
+            WithDecryption: true
+          };
           
           try {
-            // GitHub Webhookのシークレットトークンを検証
-            // 実際の実装では環境変数や AWS Secrets Manager からシークレットを取得
-            const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET;
-            
-            // X-Hub-Signature ヘッダーからの署名を検証
-            const signature = event.headers['X-Hub-Signature-256'] || event.headers['x-hub-signature-256'];
-            
-            if (!signature) {
-              console.log('Missing signature header');
-              return generatePolicy('user', 'Deny', event.methodArn);
-            }
-            
-            // 実際の実装では、リクエストボディとシークレットを使用して
-            // HMAC SHA-256 署名を計算し、GitHubから送信された署名と比較します
-            // このサンプルでは簡略化のため、特定の署名パターンをチェック
-            const isValid = signature.startsWith('sha256=') && signature.length > 50;
-            
-            if (!isValid) {
-              console.log('Invalid signature');
-              return generatePolicy('user', 'Deny', event.methodArn);
-            }
-            
-            // 検証OK
-            return generatePolicy('user', 'Allow', event.methodArn);
+            const response = await ssm.getParameter(params).promise();
+            return response.Parameter.Value;
           } catch (error) {
-            console.error('Authorization error:', error);
-            return generatePolicy('user', 'Deny', event.methodArn);
+            console.error('Error fetching parameter from SSM:', error);
+            throw error;
           }
-        };
+        }
         
-        // IAM ポリシードキュメントの生成ヘルパー関数
-        function generatePolicy(principalId, effect, resource) {
-          const authResponse = {
-            principalId: principalId,
-            policyDocument: {
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Action: 'execute-api:Invoke',
-                  Effect: effect,
-                  Resource: resource
-                }
-              ]
-            },
-            // オプション: コンテキスト情報をLambda統合に渡す
-            context: {
-              source: 'github-webhook',
-              timestamp: new Date().toISOString()
+        // GitHubのシグネチャを検証する関数
+        function verifySignature(payload, signature, secret) {
+          try {
+            // X-Hub-Signature-256があるか確認
+            if (!signature || !signature.startsWith('sha256=')) {
+              return false;
+            }
+            
+            // シグネチャをパース
+            const signatureHash = signature.substring(7); // 'sha256=' を除去
+            
+            // 期待されるシグネチャを計算
+            const hmac = crypto.createHmac('sha256', secret);
+            const calculatedSignature = hmac.update(payload).digest('hex');
+            
+            // タイミング攻撃を防ぐための比較
+            return crypto.timingSafeEqual(
+              Buffer.from(signatureHash, 'hex'),
+              Buffer.from(calculatedSignature, 'hex')
+            );
+          } catch (error) {
+            console.error('Signature verification error:', error);
+            return false;
+          }
+        }
+        
+        // Firehoseにデータを送信する関数
+        async function sendToFirehose(data, deliveryStreamName) {
+          const params = {
+            DeliveryStreamName: deliveryStreamName,
+            Record: {
+              Data: JSON.stringify(data)
             }
           };
           
-          return authResponse;
+          try {
+            const result = await firehose.putRecord(params).promise();
+            return result;
+          } catch (error) {
+            console.error('Error sending data to Firehose:', error);
+            throw error;
+          }
         }
+        
+        // Lambda関数のメインハンドラー
+        exports.handler = async (event) => {
+          console.log('Received webhook event');
+          
+          try {
+            // リクエストボディとヘッダーの取得
+            const body = event.body;
+            const headers = event.headers || {};
+            
+            // GitHubのイベントタイプとdelivery IDを取得
+            const githubEvent = headers['X-GitHub-Event'] || headers['x-github-event'];
+            const githubDelivery = headers['X-GitHub-Delivery'] || headers['x-github-delivery'];
+            const signature = headers['X-Hub-Signature-256'] || headers['x-hub-signature-256'];
+            
+            // リクエストボディが存在するかチェック
+            if (!body) {
+              console.error('No request body found');
+              return {
+                statusCode: 400,
+                body: JSON.stringify({ message: 'No request body provided' })
+              };
+            }
+            
+            // SSMパラメータストアからシークレットを取得
+            const secretToken = await getSecretFromParameterStore('/github/metrics/secret-token');
+            
+            // GitHub webhookシグネチャを検証
+            const isValid = verifySignature(
+              typeof body === 'string' ? body : JSON.stringify(body),
+              signature,
+              secretToken
+            );
+            
+            if (!isValid) {
+              console.error('Invalid signature');
+              return {
+                statusCode: 401,
+                body: JSON.stringify({ message: 'Invalid signature' })
+              };
+            }
+            
+            // リクエストボディをパース（必要に応じて）
+            const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
+            
+            // Firehoseに送信するデータを準備
+            const data = {
+              event_type: githubEvent,
+              delivery_id: githubDelivery,
+              repository: parsedBody.repository?.full_name,
+              organization: parsedBody.organization?.login,
+              sender: parsedBody.sender?.login,
+              timestamp: new Date().toISOString(),
+              payload: parsedBody
+            };
+            
+            // Firehoseにデータを送信
+            const result = await sendToFirehose(data, process.env.DELIVERY_STREAM_NAME);
+            
+            // 成功レスポンスを返す
+            return {
+              statusCode: 200,
+              body: JSON.stringify({
+                message: 'Webhook received and processed successfully',
+                recordId: result.RecordId,
+                eventType: githubEvent
+              })
+            };
+          } catch (error) {
+            // エラーログを出力
+            console.error('Error processing webhook:', error);
+            
+            // エラーレスポンスを返す
+            return {
+              statusCode: 500,
+              body: JSON.stringify({
+                message: 'Error processing webhook',
+                error: error.message
+              })
+            };
+          }
+        };
       `),
       environment: {
-        // 本番環境では AWS Secrets Manager などで管理することを推奨
-        GITHUB_WEBHOOK_SECRET: "your-github-webhook-secret-here",
+        DELIVERY_STREAM_NAME: deliveryStream.ref,
       },
-      timeout: Duration.seconds(10),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
     });
 
-    // API Gateway RequestAuthorizerを作成
-    const apiAuthorizer = new apigateway.RequestAuthorizer(
-      this,
-      "WebhookRequestAuthorizer",
-      {
-        handler: webhookAuthorizer,
-        identitySources: [
-          "method.request.header.X-Hub-Signature-256",
-          "method.request.header.X-GitHub-Event",
-          "method.request.header.X-GitHub-Delivery",
-        ],
-        resultsCacheTtl: Duration.seconds(0), // キャッシュなし（セキュリティのため）
-      },
+    // Lambda関数にSSMパラメータ読み取り権限を付与
+    webhookSecretParam.grantRead(webhookHandler);
+
+    // Lambda関数にFirehoseへの書き込み権限を付与
+    webhookHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["firehose:PutRecord", "firehose:PutRecordBatch"],
+        resources: [deliveryStream.attrArn],
+      }),
     );
 
     // Webhooksリソースを作成
     const webhooks = api.root.addResource("webhooks");
 
-    // AWS統合を使用してAPI GatewayとKinesis Data Firehoseを直接連携
-    const firehoseIntegration = new apigateway.AwsIntegration({
-      service: "firehose",
-      action: "PutRecord",
-      options: {
-        credentialsRole: apiGatewayRole,
-        requestTemplates: {
-          "application/json": `{
-            "DeliveryStreamName": "${deliveryStream.ref}",
-            "Record": {
-              "Data": "$util.base64Encode($input.body)"
-            }
-          }`,
-        },
-        integrationResponses: [
-          {
-            statusCode: "200",
-            responseTemplates: {
-              "application/json": `{
-                "message": "Webhook received successfully",
-                "deliveryStreamName": "${deliveryStream.ref}"
-              }`,
-            },
-          },
-          {
-            selectionPattern: "4\\d{2}",
-            statusCode: "400",
-            responseTemplates: {
-              "application/json": '{"message": "Bad request"}',
-            },
-          },
-          {
-            selectionPattern: "5\\d{2}",
-            statusCode: "500",
-            responseTemplates: {
-              "application/json": '{"message": "Internal server error"}',
-            },
-          },
-        ],
-      },
-    });
+    // Lambda統合を作成 - GitHubのWebhookを処理
+    const webhookIntegration = new apigateway.LambdaIntegration(webhookHandler);
 
-    // POSTメソッドを追加して、Lambda AuthorizerとFirehose統合を設定
-    webhooks.addMethod("POST", firehoseIntegration, {
-      authorizer: apiAuthorizer,
-      authorizationType: apigateway.AuthorizationType.CUSTOM,
+    // POSTメソッドを追加
+    webhooks.addMethod("POST", webhookIntegration, {
       requestParameters: {
-        "method.request.header.X-Hub-Signature-256": true,
         "method.request.header.X-GitHub-Event": true,
         "method.request.header.X-GitHub-Delivery": true,
+        "method.request.header.X-Hub-Signature-256": true,
       },
       methodResponses: [
         {
@@ -299,6 +342,12 @@ export class GitHubActivityMetricsStack extends Stack {
         },
         {
           statusCode: "400",
+          responseModels: {
+            "application/json": apigateway.Model.ERROR_MODEL,
+          },
+        },
+        {
+          statusCode: "401",
           responseModels: {
             "application/json": apigateway.Model.ERROR_MODEL,
           },
@@ -368,12 +417,17 @@ NagSuppressions.addStackSuppressions(
     {
       id: "AwsSolutions-APIG2",
       reason:
-        "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambdaオーソライザーで実装しています",
+        "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambda統合で実装しています",
+    },
+    {
+      id: "AwsSolutions-APIG4",
+      reason:
+        "GitHubのWebhookはカスタム認証が必要で、リクエスト検証は別途Lambda統合で実装しています",
     },
     {
       id: "AwsSolutions-COG4",
       reason:
-        "GitHubのWebhookではCognitoユーザープールの代わりにカスタムのLambdaオーソライザーを使用しています",
+        "GitHubのWebhookではCognitoユーザープールの代わりにカスタムのLambda統合を使用しています",
     },
   ],
   true,
