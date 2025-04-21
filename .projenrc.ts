@@ -5,7 +5,11 @@ const project = new awscdk.AwsCdkTypeScriptApp({
   name: 'github-activity-metrics-aws',
   projenrcTs: true,
 
-  deps: ['cdk-nag'],          /* Runtime dependencies of this module. */
+  deps: [
+    'cdk-nag',
+    '@aws-sdk/client-ssm',
+    '@aws-sdk/client-firehose',
+  ],
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
   // devDeps: [],             /* Build dependencies for this module. */
   // packageName: undefined,  /* The "name" in package.json. */
