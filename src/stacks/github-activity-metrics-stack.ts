@@ -30,7 +30,7 @@ export class GitHubActivityMetricsStack extends Stack {
 
     // Lambda function - Validates GitHub webhooks and sends data to Firehose
     const webhookHandler = new NodejsFunction(this, "WebhookHandler", {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: "handler",
       entry: path.join(__dirname, "../lambdas/webhook-handler/index.ts"),
       environment: {
