@@ -66,6 +66,10 @@ export class Api extends Construct {
         ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       },
+      // Disable default authentication requirement
+      defaultMethodOptions: {
+        authorizationType: apigateway.AuthorizationType.NONE,
+      },
     });
 
     // Create webhooks resource
@@ -74,8 +78,9 @@ export class Api extends Construct {
     // Create Lambda integration - Process GitHub webhooks
     const webhookIntegration = new apigateway.LambdaIntegration(webhookHandler);
 
-    // Add POST method
+    // Add POST method with explicit NONE authorization type
     webhooks.addMethod("POST", webhookIntegration, {
+      authorizationType: apigateway.AuthorizationType.NONE,
       requestParameters: {
         "method.request.header.X-GitHub-Event": true,
         "method.request.header.X-GitHub-Delivery": true,

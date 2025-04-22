@@ -747,7 +747,7 @@ exports[`Snapshot 1`] = `
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
-          "S3Key": "68aa5055f7b1774093830cec1b2d9f29f277cf70f956ede54302b45bb0ae02fb.zip",
+          "S3Key": "cc09c003bbd015d28a467f351164fb3d44fa58a6abdcfef3198f9966a11d9131.zip",
         },
         "Environment": {
           "Variables": {
