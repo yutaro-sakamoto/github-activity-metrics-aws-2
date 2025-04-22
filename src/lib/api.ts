@@ -154,6 +154,11 @@ export class Api extends Construct {
       stageName: "v1",
       loggingLevel: apigateway.MethodLoggingLevel.INFO,
       dataTraceEnabled: true,
+      // Enable access logs
+      accessLogDestination: new apigateway.LogGroupLogDestination(
+        apiGatewayLogGroup,
+      ),
+      accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       variables: {
         environment: "production",
       },
