@@ -1,14 +1,14 @@
+import * as path from "path";
 import { Stack, StackProps, CfnOutput, Duration } from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
-import * as ssm from "aws-cdk-lib/aws-ssm";
-import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as path from "path";
-import { Construct } from "constructs";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import { NagSuppressions } from "cdk-nag";
+import { Construct } from "constructs";
 
-import { Storage } from "../lib/storage";
 import { Api } from "../lib/api";
+import { Storage } from "../lib/storage";
 
 export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {

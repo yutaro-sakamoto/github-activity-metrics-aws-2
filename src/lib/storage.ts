@@ -1,10 +1,10 @@
-import { Construct } from "constructs";
 import { RemovalPolicy, Duration } from "aws-cdk-lib";
-import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as iam from "aws-cdk-lib/aws-iam";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
+import { Construct } from "constructs";
 
 export class Storage extends Construct {
   /**

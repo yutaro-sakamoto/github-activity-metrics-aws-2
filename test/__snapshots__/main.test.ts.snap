@@ -2,60 +2,78 @@
 
 exports[`Snapshot 1`] = `
 {
-  "Outputs": {
-    "FirehoseDeliveryStreamName": {
-      "Description": "Webhook データを処理するKinesis Data Firehoseストリーム",
-      "Value": {
-        "Ref": "GitHubWebhookDeliveryStream",
-      },
+  "Metadata": {
+    "cdk_nag": {
+      "rules_to_suppress": [
+        {
+          "id": "AwsSolutions-IAM4",
+          "reason": "Managed policies are acceptable during the prototype phase",
+        },
+        {
+          "id": "AwsSolutions-L1",
+          "reason": "Demo Lambda functions use inline code",
+        },
+        {
+          "id": "AwsSolutions-APIG2",
+          "reason": "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
+        },
+        {
+          "id": "AwsSolutions-APIG4",
+          "reason": "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
+        },
+        {
+          "id": "AwsSolutions-COG4",
+          "reason": "GitHub webhooks use custom Lambda integration instead of Cognito user pools",
+        },
+      ],
     },
-    "GitHubWebhookApiEndpointC76DEA86": {
+  },
+  "Outputs": {
+    "ApiGatewayGitHubWebhookApiEndpointF9B8E967": {
       "Value": {
         "Fn::Join": [
           "",
           [
             "https://",
             {
-              "Ref": "GitHubWebhookApi2D780431",
+              "Ref": "ApiGatewayGitHubWebhookApi04159D43",
             },
-            ".execute-api.",
-            {
-              "Ref": "AWS::Region",
-            },
-            ".",
+            ".execute-api.ap-northeast-1.",
             {
               "Ref": "AWS::URLSuffix",
             },
             "/",
             {
-              "Ref": "GitHubWebhookApiDeploymentStagev1468C1CA9",
+              "Ref": "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39",
             },
             "/",
           ],
         ],
       },
     },
+    "FirehoseDeliveryStreamName": {
+      "Description": "Kinesis Data Firehose stream that processes webhook data",
+      "Value": {
+        "Ref": "StorageGitHubWebhookDeliveryStreamC6EAA5F4",
+      },
+    },
     "WebhookApiUrl": {
-      "Description": "GitHub Webhookを設定するためのURL",
+      "Description": "URL for configuring GitHub Webhook",
       "Value": {
         "Fn::Join": [
           "",
           [
             "https://",
             {
-              "Ref": "GitHubWebhookApi2D780431",
+              "Ref": "ApiGatewayGitHubWebhookApi04159D43",
             },
-            ".execute-api.",
-            {
-              "Ref": "AWS::Region",
-            },
-            ".",
+            ".execute-api.ap-northeast-1.",
             {
               "Ref": "AWS::URLSuffix",
             },
             "/",
             {
-              "Ref": "GitHubWebhookApiDeploymentStagev1468C1CA9",
+              "Ref": "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39",
             },
             "/webhooks",
           ],
@@ -63,9 +81,9 @@ exports[`Snapshot 1`] = `
       },
     },
     "WebhookDataBucketName": {
-      "Description": "GitHubのWebhookデータが保存されるS3バケット",
+      "Description": "S3 bucket where GitHub webhook data is stored",
       "Value": {
-        "Ref": "GitHubWebhookDataBucket59529D8E",
+        "Ref": "StorageGitHubWebhookDataBucket3FB595E7",
       },
     },
   },
@@ -77,110 +95,60 @@ exports[`Snapshot 1`] = `
     },
   },
   "Resources": {
-    "ApiGatewayFirehoseRole53B38461": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
+    "ApiGatewayApiGatewayAccessLogsBucketB1D5C7F7": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
             {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "apigateway.amazonaws.com",
+              "id": "AwsSolutions-S1",
+              "reason": "Access logs are not enabled for the access logs bucket",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
               },
             },
           ],
-          "Version": "2012-10-17",
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
         },
       },
-      "Type": "AWS::IAM::Role",
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
     },
-    "ApiGatewayFirehoseRoleDefaultPolicy6EEADBFD": {
+    "ApiGatewayApiGatewayAccessLogsBucketPolicy5D47EADE": {
       "Properties": {
+        "Bucket": {
+          "Ref": "ApiGatewayApiGatewayAccessLogsBucketB1D5C7F7",
+        },
         "PolicyDocument": {
           "Statement": [
             {
-              "Action": [
-                "firehose:PutRecord",
-                "firehose:PutRecordBatch",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "GitHubWebhookDeliveryStream",
-                  "Arn",
-                ],
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
               },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-        "PolicyName": "ApiGatewayFirehoseRoleDefaultPolicy6EEADBFD",
-        "Roles": [
-          {
-            "Ref": "ApiGatewayFirehoseRole53B38461",
-          },
-        ],
-      },
-      "Type": "AWS::IAM::Policy",
-    },
-    "FirehoseLogGroup1B45149B": {
-      "DeletionPolicy": "Delete",
-      "Properties": {
-        "LogGroupName": "/aws/kinesisfirehose/github-webhook-delivery",
-        "RetentionInDays": 30,
-      },
-      "Type": "AWS::Logs::LogGroup",
-      "UpdateReplacePolicy": "Delete",
-    },
-    "FirehoseRoleAA67C190": {
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Statement": [
-            {
-              "Action": "sts:AssumeRole",
-              "Effect": "Allow",
+              "Effect": "Deny",
               "Principal": {
-                "Service": "firehose.amazonaws.com",
+                "AWS": "*",
               },
-            },
-          ],
-          "Version": "2012-10-17",
-        },
-      },
-      "Type": "AWS::IAM::Role",
-    },
-    "FirehoseRoleDefaultPolicyF034DFF7": {
-      "Properties": {
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Action": [
-                "logs:CreateLogStream",
-                "logs:PutLogEvents",
-              ],
-              "Effect": "Allow",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "FirehoseLogGroup1B45149B",
-                  "Arn",
-                ],
-              },
-            },
-            {
-              "Action": [
-                "s3:DeleteObject*",
-                "s3:PutObject",
-                "s3:PutObjectLegalHold",
-                "s3:PutObjectRetention",
-                "s3:PutObjectTagging",
-                "s3:PutObjectVersionTagging",
-                "s3:Abort*",
-              ],
-              "Effect": "Allow",
               "Resource": [
                 {
                   "Fn::GetAtt": [
-                    "GitHubWebhookDataBucket59529D8E",
+                    "ApiGatewayApiGatewayAccessLogsBucketB1D5C7F7",
                     "Arn",
                   ],
                 },
@@ -190,7 +158,7 @@ exports[`Snapshot 1`] = `
                     [
                       {
                         "Fn::GetAtt": [
-                          "GitHubWebhookDataBucket59529D8E",
+                          "ApiGatewayApiGatewayAccessLogsBucketB1D5C7F7",
                           "Arn",
                         ],
                       },
@@ -203,31 +171,33 @@ exports[`Snapshot 1`] = `
           ],
           "Version": "2012-10-17",
         },
-        "PolicyName": "FirehoseRoleDefaultPolicyF034DFF7",
-        "Roles": [
-          {
-            "Ref": "FirehoseRoleAA67C190",
-          },
-        ],
       },
-      "Type": "AWS::IAM::Policy",
+      "Type": "AWS::S3::BucketPolicy",
     },
-    "GitHubWebhookApi2D780431": {
+    "ApiGatewayApiGatewayAccessLogsDF8E08D5": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "RetentionInDays": 30,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "ApiGatewayGitHubWebhookApi04159D43": {
       "Properties": {
         "Description": "API for receiving GitHub webhooks",
         "Name": "GitHub Webhook API",
       },
       "Type": "AWS::ApiGateway::RestApi",
     },
-    "GitHubWebhookApiAccount710DE531": {
+    "ApiGatewayGitHubWebhookApiAccount5D4378AB": {
       "DeletionPolicy": "Retain",
       "DependsOn": [
-        "GitHubWebhookApi2D780431",
+        "ApiGatewayGitHubWebhookApi04159D43",
       ],
       "Properties": {
         "CloudWatchRoleArn": {
           "Fn::GetAtt": [
-            "GitHubWebhookApiCloudWatchRole091D0A3F",
+            "ApiGatewayGitHubWebhookApiCloudWatchRole6E002E08",
             "Arn",
           ],
         },
@@ -235,7 +205,7 @@ exports[`Snapshot 1`] = `
       "Type": "AWS::ApiGateway::Account",
       "UpdateReplacePolicy": "Retain",
     },
-    "GitHubWebhookApiCloudWatchRole091D0A3F": {
+    "ApiGatewayGitHubWebhookApiCloudWatchRole6E002E08": {
       "DeletionPolicy": "Retain",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -268,26 +238,35 @@ exports[`Snapshot 1`] = `
       "Type": "AWS::IAM::Role",
       "UpdateReplacePolicy": "Retain",
     },
-    "GitHubWebhookApiDeployment97C3ADAFa6c95186ee5da1f49332a248ddd3a60e": {
+    "ApiGatewayGitHubWebhookApiDeployment7D7676D6477dcdf93aea2d87882251183a07b296": {
       "DependsOn": [
-        "GitHubWebhookApiwebhooksPOST41C343AD",
-        "GitHubWebhookApiwebhooks229D33FB",
+        "ApiGatewayGitHubWebhookApiwebhooksPOST1AC74EDD",
+        "ApiGatewayGitHubWebhookApiwebhooksCEE10C9B",
       ],
       "Properties": {
         "Description": "API for receiving GitHub webhooks",
         "RestApiId": {
-          "Ref": "GitHubWebhookApi2D780431",
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
       },
       "Type": "AWS::ApiGateway::Deployment",
     },
-    "GitHubWebhookApiDeploymentStagev1468C1CA9": {
+    "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39": {
       "DependsOn": [
-        "GitHubWebhookApiAccount710DE531",
+        "ApiGatewayGitHubWebhookApiAccount5D4378AB",
       ],
       "Properties": {
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayApiGatewayAccessLogsDF8E08D5",
+              "Arn",
+            ],
+          },
+          "Format": "{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","user":"$context.identity.user","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}",
+        },
         "DeploymentId": {
-          "Ref": "GitHubWebhookApiDeployment97C3ADAFa6c95186ee5da1f49332a248ddd3a60e",
+          "Ref": "ApiGatewayGitHubWebhookApiDeployment7D7676D6477dcdf93aea2d87882251183a07b296",
         },
         "MethodSettings": [
           {
@@ -298,98 +277,34 @@ exports[`Snapshot 1`] = `
           },
         ],
         "RestApiId": {
-          "Ref": "GitHubWebhookApi2D780431",
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
         "StageName": "v1",
       },
       "Type": "AWS::ApiGateway::Stage",
     },
-    "GitHubWebhookApiwebhooks229D33FB": {
+    "ApiGatewayGitHubWebhookApiwebhooksCEE10C9B": {
       "Properties": {
         "ParentId": {
           "Fn::GetAtt": [
-            "GitHubWebhookApi2D780431",
+            "ApiGatewayGitHubWebhookApi04159D43",
             "RootResourceId",
           ],
         },
         "PathPart": "webhooks",
         "RestApiId": {
-          "Ref": "GitHubWebhookApi2D780431",
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
       },
       "Type": "AWS::ApiGateway::Resource",
     },
-    "GitHubWebhookApiwebhooksPOST41C343AD": {
+    "ApiGatewayGitHubWebhookApiwebhooksPOST1AC74EDD": {
       "Properties": {
-        "AuthorizationType": "CUSTOM",
-        "AuthorizerId": {
-          "Ref": "WebhookRequestAuthorizer35F7A766",
-        },
+        "AuthorizationType": "NONE",
         "HttpMethod": "POST",
         "Integration": {
-          "Credentials": {
-            "Fn::GetAtt": [
-              "ApiGatewayFirehoseRole53B38461",
-              "Arn",
-            ],
-          },
           "IntegrationHttpMethod": "POST",
-          "IntegrationResponses": [
-            {
-              "ResponseTemplates": {
-                "application/json": {
-                  "Fn::Join": [
-                    "",
-                    [
-                      "{
-                "message": "Webhook received successfully",
-                "deliveryStreamName": "",
-                      {
-                        "Ref": "GitHubWebhookDeliveryStream",
-                      },
-                      ""
-              }",
-                    ],
-                  ],
-                },
-              },
-              "StatusCode": "200",
-            },
-            {
-              "ResponseTemplates": {
-                "application/json": "{"message": "Bad request"}",
-              },
-              "SelectionPattern": "4\\d{2}",
-              "StatusCode": "400",
-            },
-            {
-              "ResponseTemplates": {
-                "application/json": "{"message": "Internal server error"}",
-              },
-              "SelectionPattern": "5\\d{2}",
-              "StatusCode": "500",
-            },
-          ],
-          "RequestTemplates": {
-            "application/json": {
-              "Fn::Join": [
-                "",
-                [
-                  "{
-            "DeliveryStreamName": "",
-                  {
-                    "Ref": "GitHubWebhookDeliveryStream",
-                  },
-                  "",
-            "Record": {
-              "Data": "$util.base64Encode($input.body)"
-            }
-          }",
-                ],
-              ],
-            },
-          },
-          "Type": "AWS",
+          "Type": "AWS_PROXY",
           "Uri": {
             "Fn::Join": [
               "",
@@ -398,11 +313,14 @@ exports[`Snapshot 1`] = `
                 {
                   "Ref": "AWS::Partition",
                 },
-                ":apigateway:",
+                ":apigateway:ap-northeast-1:lambda:path/2015-03-31/functions/",
                 {
-                  "Ref": "AWS::Region",
+                  "Fn::GetAtt": [
+                    "WebhookHandler40BDAF19",
+                    "Arn",
+                  ],
                 },
-                ":firehose:action/PutRecord",
+                "/invocations",
               ],
             ],
           },
@@ -424,6 +342,12 @@ exports[`Snapshot 1`] = `
             "ResponseModels": {
               "application/json": "Error",
             },
+            "StatusCode": "401",
+          },
+          {
+            "ResponseModels": {
+              "application/json": "Error",
+            },
             "StatusCode": "500",
           },
         ],
@@ -433,15 +357,263 @@ exports[`Snapshot 1`] = `
           "method.request.header.X-Hub-Signature-256": true,
         },
         "ResourceId": {
-          "Ref": "GitHubWebhookApiwebhooks229D33FB",
+          "Ref": "ApiGatewayGitHubWebhookApiwebhooksCEE10C9B",
         },
         "RestApiId": {
-          "Ref": "GitHubWebhookApi2D780431",
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
       },
       "Type": "AWS::ApiGateway::Method",
     },
-    "GitHubWebhookDataBucket59529D8E": {
+    "ApiGatewayGitHubWebhookApiwebhooksPOSTApiPermissionTesttestApiGatewayGitHubWebhookApi51E82DBFPOSTwebhooksFBE21DD1": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "WebhookHandler40BDAF19",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "ApiGatewayGitHubWebhookApi04159D43",
+              },
+              "/test-invoke-stage/POST/webhooks",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "ApiGatewayGitHubWebhookApiwebhooksPOSTApiPermissiontestApiGatewayGitHubWebhookApi51E82DBFPOSTwebhooksD3A1807E": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "WebhookHandler40BDAF19",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "ApiGatewayGitHubWebhookApi04159D43",
+              },
+              "/",
+              {
+                "Ref": "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39",
+              },
+              "/POST/webhooks",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "StorageAccessLogsBucketFEE4D6FB": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Access logs are not enabled for the access logs bucket (prevents infinite loop)",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "AccessControl": "LogDeliveryWrite",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "ObjectWriter",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "StorageAccessLogsBucketPolicyA88B4D13": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "StorageAccessLogsBucketFEE4D6FB",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageAccessLogsBucketFEE4D6FB",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageAccessLogsBucketFEE4D6FB",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "StorageFirehoseLogGroup4763FF26": {
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": "/aws/kinesisfirehose/github-webhook-delivery",
+        "RetentionInDays": 30,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "StorageFirehoseRoleBED157D5": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "firehose.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageFirehoseRoleDefaultPolicy895855CB": {
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Firehose service role and Lambda role have limited permissions",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "StorageFirehoseLogGroup4763FF26",
+                  "Arn",
+                ],
+              },
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageGitHubWebhookDataBucket3FB595E7",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageGitHubWebhookDataBucket3FB595E7",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "StorageFirehoseRoleDefaultPolicy895855CB",
+        "Roles": [
+          {
+            "Ref": "StorageFirehoseRoleBED157D5",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "StorageGitHubWebhookDataBucket3FB595E7": {
       "DeletionPolicy": "Retain",
       "Properties": {
         "BucketEncryption": {
@@ -466,6 +638,12 @@ exports[`Snapshot 1`] = `
             },
           ],
         },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {
+            "Ref": "StorageAccessLogsBucketFEE4D6FB",
+          },
+          "LogFilePrefix": "github-webhook-data-access-logs/",
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -476,14 +654,64 @@ exports[`Snapshot 1`] = `
       "Type": "AWS::S3::Bucket",
       "UpdateReplacePolicy": "Retain",
     },
-    "GitHubWebhookDeliveryStream": {
+    "StorageGitHubWebhookDataBucketPolicy7633F652": {
       "Properties": {
+        "Bucket": {
+          "Ref": "StorageGitHubWebhookDataBucket3FB595E7",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*",
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageGitHubWebhookDataBucket3FB595E7",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageGitHubWebhookDataBucket3FB595E7",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "StorageGitHubWebhookDeliveryStreamC6EAA5F4": {
+      "Properties": {
+        "DeliveryStreamEncryptionConfigurationInput": {
+          "KeyType": "AWS_OWNED_CMK",
+        },
         "DeliveryStreamName": "github-webhook-delivery-stream",
         "DeliveryStreamType": "DirectPut",
         "ExtendedS3DestinationConfiguration": {
           "BucketARN": {
             "Fn::GetAtt": [
-              "GitHubWebhookDataBucket59529D8E",
+              "StorageGitHubWebhookDataBucket3FB595E7",
               "Arn",
             ],
           },
@@ -494,16 +722,16 @@ exports[`Snapshot 1`] = `
           "CloudWatchLoggingOptions": {
             "Enabled": true,
             "LogGroupName": {
-              "Ref": "FirehoseLogGroup1B45149B",
+              "Ref": "StorageFirehoseLogGroup4763FF26",
             },
             "LogStreamName": "S3Delivery",
           },
           "CompressionFormat": "GZIP",
           "ErrorOutputPrefix": "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
-          "Prefix": "github-webhooks/event=!{partitionKeyFromQuery:event}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
+          "Prefix": "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           "RoleARN": {
             "Fn::GetAtt": [
-              "FirehoseRoleAA67C190",
+              "StorageFirehoseRoleBED157D5",
               "Arn",
             ],
           },
@@ -511,91 +739,97 @@ exports[`Snapshot 1`] = `
       },
       "Type": "AWS::KinesisFirehose::DeliveryStream",
     },
-    "WebhookAuthorizer1AC43164": {
+    "WebhookHandler40BDAF19": {
       "DependsOn": [
-        "WebhookAuthorizerServiceRoleE3B25EE4",
+        "WebhookHandlerServiceRoleDefaultPolicyE376E30C",
+        "WebhookHandlerServiceRoleF07A4D12",
       ],
       "Properties": {
         "Code": {
-          "ZipFile": "
-        // GitHubからのWebhook認証Lambda
-        exports.handler = async (event) => {
-          console.log('Auth Event:', JSON.stringify(event));
-          
-          try {
-            // GitHub Webhookのシークレットトークンを検証
-            // 実際の実装では環境変数や AWS Secrets Manager からシークレットを取得
-            const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET;
-            
-            // X-Hub-Signature ヘッダーからの署名を検証
-            const signature = event.headers['X-Hub-Signature-256'] || event.headers['x-hub-signature-256'];
-            
-            if (!signature) {
-              console.log('Missing signature header');
-              return generatePolicy('user', 'Deny', event.methodArn);
-            }
-            
-            // 実際の実装では、リクエストボディとシークレットを使用して
-            // HMAC SHA-256 署名を計算し、GitHubから送信された署名と比較します
-            // このサンプルでは簡略化のため、特定の署名パターンをチェック
-            const isValid = signature.startsWith('sha256=') && signature.length > 50;
-            
-            if (!isValid) {
-              console.log('Invalid signature');
-              return generatePolicy('user', 'Deny', event.methodArn);
-            }
-            
-            // 検証OK
-            return generatePolicy('user', 'Allow', event.methodArn);
-          } catch (error) {
-            console.error('Authorization error:', error);
-            return generatePolicy('user', 'Deny', event.methodArn);
-          }
-        };
-        
-        // IAM ポリシードキュメントの生成ヘルパー関数
-        function generatePolicy(principalId, effect, resource) {
-          const authResponse = {
-            principalId: principalId,
-            policyDocument: {
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Action: 'execute-api:Invoke',
-                  Effect: effect,
-                  Resource: resource
-                }
-              ]
-            },
-            // オプション: コンテキスト情報をLambda統合に渡す
-            context: {
-              source: 'github-webhook',
-              timestamp: new Date().toISOString()
-            }
-          };
-          
-          return authResponse;
-        }
-      ",
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "68aa5055f7b1774093830cec1b2d9f29f277cf70f956ede54302b45bb0ae02fb.zip",
         },
         "Environment": {
           "Variables": {
-            "GITHUB_WEBHOOK_SECRET": "your-github-webhook-secret-here",
+            "DELIVERY_STREAM_NAME": {
+              "Ref": "StorageGitHubWebhookDeliveryStreamC6EAA5F4",
+            },
           },
         },
         "Handler": "index.handler",
+        "MemorySize": 256,
         "Role": {
           "Fn::GetAtt": [
-            "WebhookAuthorizerServiceRoleE3B25EE4",
+            "WebhookHandlerServiceRoleF07A4D12",
             "Arn",
           ],
         },
         "Runtime": "nodejs18.x",
-        "Timeout": 10,
+        "Timeout": 30,
       },
       "Type": "AWS::Lambda::Function",
     },
-    "WebhookAuthorizerServiceRoleE3B25EE4": {
+    "WebhookHandlerServiceRoleDefaultPolicyE376E30C": {
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Firehose service role and Lambda role have limited permissions",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ssm:DescribeParameters",
+                "ssm:GetParameters",
+                "ssm:GetParameter",
+                "ssm:GetParameterHistory",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ssm:ap-northeast-1:123456789012:parameter/github/metrics/secret-token",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": [
+                "firehose:PutRecord",
+                "firehose:PutRecordBatch",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "StorageGitHubWebhookDeliveryStreamC6EAA5F4",
+                  "Arn",
+                ],
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "WebhookHandlerServiceRoleDefaultPolicyE376E30C",
+        "Roles": [
+          {
+            "Ref": "WebhookHandlerServiceRoleF07A4D12",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "WebhookHandlerServiceRoleF07A4D12": {
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Statement": [
@@ -625,107 +859,6 @@ exports[`Snapshot 1`] = `
         ],
       },
       "Type": "AWS::IAM::Role",
-    },
-    "WebhookAuthorizertestWebhookRequestAuthorizer92833299PermissionsB2599C16": {
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "WebhookAuthorizer1AC43164",
-            "Arn",
-          ],
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Ref": "AWS::Partition",
-              },
-              ":execute-api:",
-              {
-                "Ref": "AWS::Region",
-              },
-              ":",
-              {
-                "Ref": "AWS::AccountId",
-              },
-              ":",
-              {
-                "Ref": "GitHubWebhookApi2D780431",
-              },
-              "/authorizers/",
-              {
-                "Ref": "WebhookRequestAuthorizer35F7A766",
-              },
-            ],
-          ],
-        },
-      },
-      "Type": "AWS::Lambda::Permission",
-    },
-    "WebhookRequestAuthorizer35F7A766": {
-      "Properties": {
-        "AuthorizerResultTtlInSeconds": 0,
-        "AuthorizerUri": {
-          "Fn::Join": [
-            "",
-            [
-              "arn:",
-              {
-                "Fn::Select": [
-                  1,
-                  {
-                    "Fn::Split": [
-                      ":",
-                      {
-                        "Fn::GetAtt": [
-                          "WebhookAuthorizer1AC43164",
-                          "Arn",
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              ":apigateway:",
-              {
-                "Fn::Select": [
-                  3,
-                  {
-                    "Fn::Split": [
-                      ":",
-                      {
-                        "Fn::GetAtt": [
-                          "WebhookAuthorizer1AC43164",
-                          "Arn",
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              ":lambda:path/2015-03-31/functions/",
-              {
-                "Fn::GetAtt": [
-                  "WebhookAuthorizer1AC43164",
-                  "Arn",
-                ],
-              },
-              "/invocations",
-            ],
-          ],
-        },
-        "IdentitySource": "method.request.header.X-Hub-Signature-256,method.request.header.X-GitHub-Event,method.request.header.X-GitHub-Delivery",
-        "Name": "testWebhookRequestAuthorizer92833299",
-        "RestApiId": {
-          "Ref": "GitHubWebhookApi2D780431",
-        },
-        "Type": "REQUEST",
-      },
-      "Type": "AWS::ApiGateway::Authorizer",
     },
   },
   "Rules": {

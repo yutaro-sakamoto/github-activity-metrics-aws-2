@@ -1,9 +1,9 @@
-import { Construct } from "constructs";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as logs from "aws-cdk-lib/aws-logs";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
+import { Construct } from "constructs";
 
 export interface ApiProps {
   /**

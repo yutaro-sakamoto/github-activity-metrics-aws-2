@@ -1,6 +1,6 @@
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
-import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
 import * as crypto from "crypto";
+import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
