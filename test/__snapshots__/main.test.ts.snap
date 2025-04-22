@@ -73,9 +73,9 @@ exports[`Snapshot 1`] = `
             },
             "/",
             {
-              "Ref": "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39",
+              "Ref": "ApiGatewayStageC6B2ACC6",
             },
-            "/webhooks",
+            "/v1/webhooks",
           ],
         ],
       },
@@ -182,9 +182,30 @@ exports[`Snapshot 1`] = `
       "Type": "AWS::Logs::LogGroup",
       "UpdateReplacePolicy": "Retain",
     },
+    "ApiGatewayDeploymentA26796E8a30626c365db34287f367e2d811c2348": {
+      "DependsOn": [
+        "ApiGatewayGitHubWebhookApiwebhooksOPTIONS9E70C155",
+        "ApiGatewayGitHubWebhookApiwebhooksPOST1AC74EDD",
+      ],
+      "Properties": {
+        "Description": "Deployment triggered at 2025-04-22T16:08:19.748Z",
+        "RestApiId": {
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
+        },
+      },
+      "Type": "AWS::ApiGateway::Deployment",
+    },
     "ApiGatewayGitHubWebhookApi04159D43": {
       "Properties": {
+        "BinaryMediaTypes": [
+          "application/json",
+        ],
         "Description": "API for receiving GitHub webhooks",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL",
+          ],
+        },
         "Name": "GitHub Webhook API",
       },
       "Type": "AWS::ApiGateway::RestApi",
@@ -238,13 +259,14 @@ exports[`Snapshot 1`] = `
       "Type": "AWS::IAM::Role",
       "UpdateReplacePolicy": "Retain",
     },
-    "ApiGatewayGitHubWebhookApiDeployment7D7676D6477dcdf93aea2d87882251183a07b296": {
+    "ApiGatewayGitHubWebhookApiDeployment7D7676D6bc25f82306656a37169a827d5bdecda0": {
       "DependsOn": [
+        "ApiGatewayGitHubWebhookApiwebhooksOPTIONS9E70C155",
         "ApiGatewayGitHubWebhookApiwebhooksPOST1AC74EDD",
         "ApiGatewayGitHubWebhookApiwebhooksCEE10C9B",
       ],
       "Properties": {
-        "Description": "API for receiving GitHub webhooks",
+        "Description": "Production deployment for GitHub Webhooks",
         "RestApiId": {
           "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
@@ -266,13 +288,15 @@ exports[`Snapshot 1`] = `
           "Format": "{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","user":"$context.identity.user","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}",
         },
         "DeploymentId": {
-          "Ref": "ApiGatewayGitHubWebhookApiDeployment7D7676D6477dcdf93aea2d87882251183a07b296",
+          "Ref": "ApiGatewayGitHubWebhookApiDeployment7D7676D6bc25f82306656a37169a827d5bdecda0",
         },
+        "Description": "Production deployment for GitHub Webhooks",
         "MethodSettings": [
           {
             "DataTraceEnabled": true,
             "HttpMethod": "*",
             "LoggingLevel": "INFO",
+            "MetricsEnabled": true,
             "ResourcePath": "/*",
           },
         ],
@@ -280,6 +304,11 @@ exports[`Snapshot 1`] = `
           "Ref": "ApiGatewayGitHubWebhookApi04159D43",
         },
         "StageName": "v1",
+        "TracingEnabled": true,
+        "Variables": {
+          "DEPLOYED_BY": "CDK",
+          "DEPLOYMENT_DATE": "2025-04-22T16:08:19.733Z",
+        },
       },
       "Type": "AWS::ApiGateway::Stage",
     },
@@ -298,8 +327,49 @@ exports[`Snapshot 1`] = `
       },
       "Type": "AWS::ApiGateway::Resource",
     },
+    "ApiGatewayGitHubWebhookApiwebhooksOPTIONS9E70C155": {
+      "Properties": {
+        "ApiKeyRequired": false,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-GitHub-Event,X-GitHub-Delivery,X-Hub-Signature-256'",
+                "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+              },
+              "StatusCode": "204",
+            },
+          ],
+          "RequestTemplates": {
+            "application/json": "{ statusCode: 200 }",
+          },
+          "Type": "MOCK",
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+            "StatusCode": "204",
+          },
+        ],
+        "ResourceId": {
+          "Ref": "ApiGatewayGitHubWebhookApiwebhooksCEE10C9B",
+        },
+        "RestApiId": {
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
     "ApiGatewayGitHubWebhookApiwebhooksPOST1AC74EDD": {
       "Properties": {
+        "ApiKeyRequired": false,
         "AuthorizationType": "NONE",
         "HttpMethod": "POST",
         "Integration": {
@@ -418,7 +488,7 @@ exports[`Snapshot 1`] = `
               },
               "/",
               {
-                "Ref": "ApiGatewayGitHubWebhookApiDeploymentStagev17CEA2F39",
+                "Ref": "ApiGatewayStageC6B2ACC6",
               },
               "/POST/webhooks",
             ],
@@ -426,6 +496,32 @@ exports[`Snapshot 1`] = `
         },
       },
       "Type": "AWS::Lambda::Permission",
+    },
+    "ApiGatewayStageC6B2ACC6": {
+      "DependsOn": [
+        "ApiGatewayGitHubWebhookApiAccount5D4378AB",
+      ],
+      "Properties": {
+        "DeploymentId": {
+          "Ref": "ApiGatewayDeploymentA26796E8a30626c365db34287f367e2d811c2348",
+        },
+        "MethodSettings": [
+          {
+            "DataTraceEnabled": true,
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "ResourcePath": "/*",
+          },
+        ],
+        "RestApiId": {
+          "Ref": "ApiGatewayGitHubWebhookApi04159D43",
+        },
+        "StageName": "v1",
+        "Variables": {
+          "environment": "production",
+        },
+      },
+      "Type": "AWS::ApiGateway::Stage",
     },
     "StorageAccessLogsBucketFEE4D6FB": {
       "DeletionPolicy": "Retain",

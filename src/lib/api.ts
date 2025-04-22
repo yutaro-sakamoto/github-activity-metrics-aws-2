@@ -56,6 +56,7 @@ export class Api extends Construct {
     this.api = new apigateway.RestApi(this, "GitHubWebhookApi", {
       restApiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
+      deploy: true,
       deployOptions: {
         stageName: "v1",
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
@@ -65,22 +66,37 @@ export class Api extends Construct {
           apiGatewayLogGroup,
         ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
+        description: "Production deployment for GitHub Webhooks",
+        metricsEnabled: true,
+        tracingEnabled: true,
+        variables: {
+          DEPLOYED_BY: "CDK",
+          DEPLOYMENT_DATE: new Date().toISOString(),
+        },
       },
+      endpointTypes: [apigateway.EndpointType.REGIONAL],
       // Disable default authentication requirement
       defaultMethodOptions: {
         authorizationType: apigateway.AuthorizationType.NONE,
       },
+      binaryMediaTypes: ["application/json"],
     });
 
     // Create webhooks resource
     const webhooks = this.api.root.addResource("webhooks");
 
     // Create Lambda integration - Process GitHub webhooks
-    const webhookIntegration = new apigateway.LambdaIntegration(webhookHandler);
+    const webhookIntegration = new apigateway.LambdaIntegration(
+      webhookHandler,
+      {
+        proxy: true,
+      },
+    );
 
     // Add POST method with explicit NONE authorization type
     webhooks.addMethod("POST", webhookIntegration, {
       authorizationType: apigateway.AuthorizationType.NONE,
+      apiKeyRequired: false,
       requestParameters: {
         "method.request.header.X-GitHub-Event": true,
         "method.request.header.X-GitHub-Delivery": true,
@@ -114,7 +130,39 @@ export class Api extends Construct {
       ],
     });
 
+    // Add CORS settings
+    webhooks.addCorsPreflight({
+      allowOrigins: ["*"],
+      allowMethods: ["POST", "OPTIONS"],
+      allowHeaders: [
+        "Content-Type",
+        "X-GitHub-Event",
+        "X-GitHub-Delivery",
+        "X-Hub-Signature-256",
+      ],
+    });
+
+    // Create explicit deployment
+    const deployment = new apigateway.Deployment(this, "Deployment", {
+      api: this.api,
+      description: `Deployment triggered at ${new Date().toISOString()}`,
+    });
+
+    // Create explicit stage and link to deployment
+    const stage = new apigateway.Stage(this, "Stage", {
+      deployment,
+      stageName: "v1",
+      loggingLevel: apigateway.MethodLoggingLevel.INFO,
+      dataTraceEnabled: true,
+      variables: {
+        environment: "production",
+      },
+    });
+
+    // Link deployment stage to API Gateway
+    this.api.deploymentStage = stage;
+
     // Store webhook URL
-    this.webhookUrl = `${this.api.url}webhooks`;
+    this.webhookUrl = `${this.api.url}v1/webhooks`;
   }
 }
