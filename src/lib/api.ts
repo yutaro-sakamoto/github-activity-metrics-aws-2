@@ -56,7 +56,7 @@ export class Api extends Construct {
     this.api = new apigateway.RestApi(this, "GitHubWebhookApi", {
       restApiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
-      deploy: false, // Changed from true to false to prevent automatic deployment
+      deploy: true,
       // Removed deployOptions to avoid creating a duplicate stage
       endpointTypes: [apigateway.EndpointType.REGIONAL],
       // Disable default authentication requirement
