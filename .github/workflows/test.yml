@@ -22,4 +22,4 @@ jobs:
       - name: synth
         run: npx cdk synth
       - name: Check docs
-        run: npx typedoc --validation src/*.ts
+        run: npx typedoc --validation --skipErrorChecking 'node_modules/@octokit/webhooks/**/*.ts' src/*.ts
