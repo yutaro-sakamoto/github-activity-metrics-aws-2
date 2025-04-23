@@ -9,6 +9,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     'cdk-nag',
     '@aws-sdk/client-ssm',
     '@aws-sdk/client-firehose',
+    '@octokit/webhooks',
   ],
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
   // devDeps: [],             /* Build dependencies for this module. */

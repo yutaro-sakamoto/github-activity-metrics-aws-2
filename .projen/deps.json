@@ -79,6 +79,10 @@
       "type": "runtime"
     },
     {
+      "name": "@octokit/webhooks",
+      "type": "runtime"
+    },
+    {
       "name": "aws-cdk-lib",
       "version": "^2.1.0",
       "type": "runtime"

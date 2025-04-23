@@ -1,6 +1,6 @@
-import * as crypto from "crypto";
 import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
+import { Webhooks } from "@octokit/webhooks";
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
@@ -22,36 +22,6 @@ async function getSecretFromParameterStore(
   } catch (error) {
     console.error("Error fetching parameter from SSM:", error);
     throw error;
-  }
-}
-
-// Function to verify GitHub signature
-function verifySignature(
-  payload: string,
-  signature: string,
-  secret: string,
-): boolean {
-  try {
-    // Check if X-Hub-Signature-256 exists
-    if (!signature || !signature.startsWith("sha256=")) {
-      return false;
-    }
-
-    // Parse signature
-    const signatureHash = signature.substring(7); // Remove 'sha256='
-
-    // Calculate expected signature
-    const hmac = crypto.createHmac("sha256", secret);
-    const calculatedSignature = hmac.update(payload).digest("hex");
-
-    // Compare using timing-safe comparison to prevent timing attacks
-    return crypto.timingSafeEqual(
-      Buffer.from(signatureHash, "hex"),
-      Buffer.from(calculatedSignature, "hex"),
-    );
-  } catch (error) {
-    console.error("Signature verification error:", error);
-    return false;
   }
 }
 
@@ -104,15 +74,19 @@ export const handler = async (event: any) => {
       "/github/metrics/secret-token",
     );
 
-    // Verify GitHub webhook signature
-    const isValid = verifySignature(
-      typeof body === "string" ? body : JSON.stringify(body),
-      signature,
-      secretToken,
-    );
+    // Create webhook instance with the secret
+    const webhooks = new Webhooks({
+      secret: secretToken,
+    });
 
-    if (!isValid) {
-      console.error("Invalid signature");
+    // Convert body to string if it's not already
+    const bodyStr = typeof body === "string" ? body : JSON.stringify(body);
+
+    // Verify GitHub webhook signature using @octokit/webhooks
+    try {
+      await webhooks.verify(bodyStr, signature);
+    } catch (error) {
+      console.error("Invalid signature", error);
       return {
         statusCode: 401,
         body: JSON.stringify({ message: "Invalid signature" }),
