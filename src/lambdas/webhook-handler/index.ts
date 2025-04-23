@@ -115,20 +115,18 @@ export const handler = async (event: any) => {
       };
     }
 
-    // Prepare data to send to Firehose
-    const data = {
+    // メタデータを別途ロギングするが、Firehoseにはオリジナルデータをそのまま送信
+    console.log("GitHub Webhook received:", {
       event_type: githubEvent,
       delivery_id: githubDelivery,
       repository: parsedBody.repository?.full_name,
       organization: parsedBody.organization?.login,
       sender: parsedBody.sender?.login,
-      timestamp: new Date().toISOString(),
-      payload: parsedBody,
-    };
+    });
 
-    // Send data to Firehose
+    // Send original data directly to Firehose
     const result = await sendToFirehose(
-      data,
+      parsedBody,
       process.env.DELIVERY_STREAM_NAME!,
     );
 
