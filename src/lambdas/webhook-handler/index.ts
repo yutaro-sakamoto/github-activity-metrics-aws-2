@@ -50,8 +50,15 @@ export const handler = async (event: any) => {
 
   try {
     // Get request body and headers
-    const body = event.body;
+    let body = event.body;
     const headers = event.headers || {};
+    const isBase64Encoded = event.isBase64Encoded || false;
+
+    // If body is Base64 encoded, decode it
+    if (isBase64Encoded && body) {
+      body = Buffer.from(body, "base64").toString("utf8");
+      console.log("Decoded Base64 body");
+    }
 
     // Get GitHub event type and delivery ID
     const githubEvent = headers["X-GitHub-Event"] || headers["x-github-event"];
@@ -79,7 +86,7 @@ export const handler = async (event: any) => {
       secret: secretToken,
     });
 
-    // Convert body to string if it's not already
+    // Ensure body is a string for webhook verification
     const bodyStr = typeof body === "string" ? body : JSON.stringify(body);
 
     // Verify GitHub webhook signature using @octokit/webhooks
@@ -93,8 +100,20 @@ export const handler = async (event: any) => {
       };
     }
 
-    // Parse request body (if necessary)
-    const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+    // Parse request body
+    let parsedBody;
+    try {
+      parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+    } catch (error) {
+      console.error("Error parsing body:", error, "Raw body:", body);
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          message: "Invalid JSON body",
+          error: (error as Error).message,
+        }),
+      };
+    }
 
     // Prepare data to send to Firehose
     const data = {
