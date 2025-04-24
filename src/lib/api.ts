@@ -1,4 +1,5 @@
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
+import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
+import * as apigatewayv2_integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -14,9 +15,9 @@ export interface ApiProps {
 
 export class Api extends Construct {
   /**
-   * API Gateway REST API
+   * API Gateway HTTP API
    */
-  public readonly api: apigateway.RestApi;
+  public readonly api: apigatewayv2.HttpApi;
 
   /**
    * Complete URL for the webhook endpoint
@@ -52,105 +53,65 @@ export class Api extends Construct {
       retention: logs.RetentionDays.ONE_MONTH,
     });
 
-    // REST API Gateway (for GitHub Webhooks)
-    this.api = new apigateway.RestApi(this, "GitHubWebhookApi", {
-      restApiName: "GitHub Webhook API",
+    // HTTP API Gateway (for GitHub Webhooks)
+    this.api = new apigatewayv2.HttpApi(this, "GitHubWebhookApi", {
+      apiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
-      deploy: false,
-      endpointTypes: [apigateway.EndpointType.REGIONAL],
-      // Disable default authentication requirement
-      defaultMethodOptions: {
-        authorizationType: apigateway.AuthorizationType.NONE,
+      createDefaultStage: false, // デフォルトステージを作成しない
+      corsPreflight: {
+        allowOrigins: ["*"],
+        allowMethods: [apigatewayv2.CorsHttpMethod.POST],
+        allowHeaders: [
+          "Content-Type",
+          "X-GitHub-Event",
+          "X-GitHub-Delivery",
+          "X-Hub-Signature-256",
+        ],
       },
-      binaryMediaTypes: ["application/json"],
     });
-
-    // Create webhooks resource
-    const webhooks = this.api.root.addResource("webhooks");
 
     // Create Lambda integration - Process GitHub webhooks
-    const webhookIntegration = new apigateway.LambdaIntegration(
-      webhookHandler,
-      {
-        proxy: true,
+    const webhookIntegration =
+      new apigatewayv2_integrations.HttpLambdaIntegration(
+        "WebhookIntegration",
+        webhookHandler,
+      );
+
+    // Add route for webhooks
+    this.api.addRoutes({
+      path: "/webhooks",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: webhookIntegration,
+    });
+
+    // 明示的なステージを作成
+    new apigatewayv2.CfnStage(this, "V2Stage", {
+      apiId: this.api.apiId,
+      stageName: "v2",
+      autoDeploy: true, // APIの変更が自動的にデプロイされるよう設定
+      accessLogSettings: {
+        destinationArn: apiGatewayLogGroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: "$context.requestId",
+          ip: "$context.identity.sourceIp",
+          caller: "$context.identity.caller",
+          user: "$context.identity.user",
+          requestTime: "$context.requestTime",
+          httpMethod: "$context.httpMethod",
+          resourcePath: "$context.resourcePath",
+          status: "$context.status",
+          protocol: "$context.protocol",
+          responseLength: "$context.responseLength",
+        }),
       },
-    );
-
-    // Add POST method with explicit NONE authorization type
-    webhooks.addMethod("POST", webhookIntegration, {
-      authorizationType: apigateway.AuthorizationType.NONE,
-      apiKeyRequired: false,
-      requestParameters: {
-        "method.request.header.X-GitHub-Event": true,
-        "method.request.header.X-GitHub-Delivery": true,
-        "method.request.header.X-Hub-Signature-256": true,
-      },
-      methodResponses: [
-        {
-          statusCode: "200",
-          responseModels: {
-            "application/json": apigateway.Model.EMPTY_MODEL,
-          },
-        },
-        {
-          statusCode: "400",
-          responseModels: {
-            "application/json": apigateway.Model.ERROR_MODEL,
-          },
-        },
-        {
-          statusCode: "401",
-          responseModels: {
-            "application/json": apigateway.Model.ERROR_MODEL,
-          },
-        },
-        {
-          statusCode: "500",
-          responseModels: {
-            "application/json": apigateway.Model.ERROR_MODEL,
-          },
-        },
-      ],
-    });
-
-    // Add CORS settings
-    webhooks.addCorsPreflight({
-      allowOrigins: ["*"],
-      allowMethods: ["POST", "OPTIONS"],
-      allowHeaders: [
-        "Content-Type",
-        "X-GitHub-Event",
-        "X-GitHub-Delivery",
-        "X-Hub-Signature-256",
-      ],
-    });
-
-    // Create explicit deployment
-    const deployment = new apigateway.Deployment(this, "Deployment", {
-      api: this.api,
-      description: `Deployment triggered at ${new Date().toISOString()}`,
-    });
-
-    // Create explicit stage and link to deployment
-    const stage = new apigateway.Stage(this, "Stage", {
-      deployment,
-      stageName: "v1",
-      loggingLevel: apigateway.MethodLoggingLevel.INFO,
-      dataTraceEnabled: true,
-      // Enable access logs
-      accessLogDestination: new apigateway.LogGroupLogDestination(
-        apiGatewayLogGroup,
-      ),
-      accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
-      variables: {
-        environment: "production",
+      defaultRouteSettings: {
+        throttlingBurstLimit: 100,
+        throttlingRateLimit: 50,
+        detailedMetricsEnabled: true,
       },
     });
 
-    // Link deployment stage to API Gateway
-    this.api.deploymentStage = stage;
-
-    // Store webhook URL
-    this.webhookUrl = `${this.api.url}v1/webhooks`;
+    // Store webhook URL with stage name
+    this.webhookUrl = `${this.api.apiEndpoint}/v2/webhooks`;
   }
 }
