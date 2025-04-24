@@ -22,7 +22,8 @@ export class Storage extends Construct {
 
     // S3 bucket - for access logs
     const accessLogsBucket = new s3.Bucket(this, "AccessLogsBucket", {
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true, // Enforce SSL connections
@@ -30,7 +31,8 @@ export class Storage extends Construct {
 
     // S3 bucket - Destination for GitHub webhook data
     this.dataBucket = new s3.Bucket(this, "GitHubWebhookDataBucket", {
-      removalPolicy: RemovalPolicy.RETAIN, // Retain data in production environment
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true, // Enforce SSL connections

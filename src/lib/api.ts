@@ -5,6 +5,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
+import { RemovalPolicy } from "aws-cdk-lib";
 
 export interface ApiProps {
   /**
@@ -34,6 +35,8 @@ export class Api extends Construct {
       this,
       "ApiGatewayAccessLogsBucket",
       {
+        removalPolicy: RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,
