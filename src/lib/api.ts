@@ -56,18 +56,7 @@ export class Api extends Construct {
     this.api = new apigateway.RestApi(this, "GitHubWebhookApi", {
       restApiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
-      deploy: true,
-      deployOptions: {
-        accessLogDestination: new apigateway.LogGroupLogDestination(
-          apiGatewayLogGroup,
-        ),
-        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
-        dataTraceEnabled: true,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        metricsEnabled: true,
-        tracingEnabled: true,
-      },
-      // Removed deployOptions to avoid creating a duplicate stage
+      deploy: false,
       endpointTypes: [apigateway.EndpointType.REGIONAL],
       // Disable default authentication requirement
       defaultMethodOptions: {
