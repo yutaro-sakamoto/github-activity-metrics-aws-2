@@ -87,12 +87,28 @@ export class Storage extends Construct {
             intervalInSeconds: 60, // Buffer every 1 minute
             sizeInMBs: 5, // Or every 5MB
           },
-          // Standard prefix without dynamic partitioning
+          // Athenaに最適なパーティショニングを適用
           prefix:
             "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           errorOutputPrefix:
             "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
           compressionFormat: "GZIP",
+          // データ変換とフォーマット
+          dataFormatConversionConfiguration: {
+            enabled: false, // 現在のJSON形式を維持（必要に応じてParquetに変更可能）
+          },
+          // S3の最適化設定
+          s3BackupConfiguration: {
+            bucketArn: this.dataBucket.bucketArn,
+            roleArn: firehoseRole.roleArn,
+            prefix: "backup/",
+            bufferingHints: {
+              intervalInSeconds: 300,
+              sizeInMBs: 5,
+            },
+            compressionFormat: "GZIP",
+          },
+          s3BackupMode: "Disabled", // 必要に応じて有効化
           cloudWatchLoggingOptions: {
             enabled: true,
             logGroupName: firehoseLogGroup.logGroupName,

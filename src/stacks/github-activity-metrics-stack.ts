@@ -9,6 +9,7 @@ import { Construct } from "constructs";
 
 import { Api } from "../lib/api";
 import { Storage } from "../lib/storage";
+import { Analytics } from "../lib/analytics";
 
 export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
@@ -63,6 +64,11 @@ export class GitHubActivityMetricsStack extends Stack {
       webhookHandler,
     });
 
+    // Add Analytics resources for Athena queries
+    const analytics = new Analytics(this, "Analytics", {
+      dataBucket: storage.dataBucket,
+    });
+
     // Output values
     new CfnOutput(this, "WebhookApiUrl", {
       value: api.webhookUrl,
@@ -77,6 +83,17 @@ export class GitHubActivityMetricsStack extends Stack {
     new CfnOutput(this, "FirehoseDeliveryStreamName", {
       value: storage.deliveryStream.ref,
       description: "Kinesis Data Firehose stream that processes webhook data",
+    });
+
+    // Athena関連の出力
+    new CfnOutput(this, "AthenaWorkgroupName", {
+      value: analytics.workgroup.ref,
+      description: "Athena workgroup for querying GitHub webhook data",
+    });
+
+    new CfnOutput(this, "GlueDatabaseName", {
+      value: analytics.database.ref,
+      description: "Glue database containing GitHub webhook data schema",
     });
 
     // Configure CDK Nag suppressions
