@@ -63,9 +63,29 @@ export class Analytics extends Construct {
         description: "GitHub webhook events data",
         tableType: "EXTERNAL_TABLE",
         parameters: {
+          // データ形式に基づいて適切なタイプを設定
+          // JSON形式の場合
           classification: "json",
           compressionType: "gzip",
+
+          // Parquet形式の場合はこちらを使用（JSONの設定を削除）
+          // "classification": "parquet",
+          // "compressionType": "snappy",
+
           typeOfData: "file",
+          // パーティションプロジェクションを有効化
+          "projection.enabled": "true",
+          "projection.year.type": "integer",
+          "projection.year.range": "2020,2030",
+          "projection.month.type": "integer",
+          "projection.month.range": "1,12",
+          "projection.month.digits": "2",
+          "projection.day.type": "integer",
+          "projection.day.range": "1,31",
+          "projection.day.digits": "2",
+          "storage.location.template":
+            `s3://${dataBucket.bucketName}/github-webhooks/` +
+            "year=${year}/month=${month}/day=${day}/",
         },
         partitionKeys: [
           { name: "year", type: "string" },
