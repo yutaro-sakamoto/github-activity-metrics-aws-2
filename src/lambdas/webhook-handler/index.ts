@@ -124,9 +124,39 @@ export const handler = async (event: any) => {
       sender: parsedBody.sender?.login,
     });
 
-    // Send original data directly to Firehose
+    // 構造化されたデータをFirehoseに送信
+    // Athenaクエリでアクセスしやすいように重要なフィールドは最上位に配置し、
+    // 元のJSONデータ全体をpayloadフィールドに含める
+    const structuredData = {
+      action: parsedBody.action,
+      repository: parsedBody.repository
+        ? {
+            id: parsedBody.repository.id,
+            name: parsedBody.repository.name,
+            full_name: parsedBody.repository.full_name,
+          }
+        : null,
+      organization: parsedBody.organization
+        ? {
+            login: parsedBody.organization.login,
+            id: parsedBody.organization.id,
+          }
+        : null,
+      sender: parsedBody.sender
+        ? {
+            login: parsedBody.sender.login,
+            id: parsedBody.sender.id,
+          }
+        : null,
+      event_type: githubEvent,
+      delivery_id: githubDelivery,
+      // webhookデータ全体をJSON文字列としてpayloadフィールドに格納
+      payload: JSON.stringify(parsedBody),
+    };
+
+    // 構造化されたデータをFirehoseに送信
     const result = await sendToFirehose(
-      parsedBody,
+      structuredData,
       process.env.DELIVERY_STREAM_NAME!,
     );
 
