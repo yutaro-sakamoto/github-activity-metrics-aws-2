@@ -3,6 +3,7 @@ import { RemovalPolicy, CfnOutput, Stack } from "aws-cdk-lib";
 import * as athena from "aws-cdk-lib/aws-athena";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { NagSuppressions } from "cdk-nag";
 
@@ -37,6 +38,34 @@ export class Analytics extends Construct {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
     });
+
+    // QuickSight用にバケットポリシーを追加
+    const quickSightPrincipal = new iam.ServicePrincipal(
+      "quicksight.amazonaws.com",
+    );
+
+    // QuickSightに結果バケットへのアクセス許可を与える
+    athenaResultsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [quickSightPrincipal],
+        actions: ["s3:*"],
+        resources: [
+          athenaResultsBucket.bucketArn,
+          `${athenaResultsBucket.bucketArn}/*`,
+        ],
+      }),
+    );
+
+    // データバケットにもQuickSightからのアクセス権限を与える
+    dataBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [quickSightPrincipal],
+        actions: ["s3:*"],
+        resources: [dataBucket.bucketArn, `${dataBucket.bucketArn}/*`],
+      }),
+    );
 
     NagSuppressions.addResourceSuppressions(athenaResultsBucket, [
       {
