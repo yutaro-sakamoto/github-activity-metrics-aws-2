@@ -1,5 +1,5 @@
 // filepath: /home/main/project/github-activity-metrics-aws/src/lib/analytics.ts
-import { RemovalPolicy, CfnOutput } from "aws-cdk-lib";
+import { RemovalPolicy, CfnOutput, Stack } from "aws-cdk-lib";
 import * as athena from "aws-cdk-lib/aws-athena";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -47,7 +47,7 @@ export class Analytics extends Construct {
 
     // Create a Glue database for GitHub webhook data
     this.database = new glue.CfnDatabase(this, "GitHubWebhookDatabase", {
-      catalogId: scope.node.tryGetContext("accountId") || "${AWS::AccountId}",
+      catalogId: Stack.of(this).account,
       databaseInput: {
         name: "github_webhooks_db",
         description: "Database for GitHub webhook data analysis",
@@ -56,7 +56,7 @@ export class Analytics extends Construct {
 
     // Create Glue table for webhook data
     const webhookTable = new glue.CfnTable(this, "WebhookTable", {
-      catalogId: scope.node.tryGetContext("accountId") || "${AWS::AccountId}",
+      catalogId: Stack.of(this).account,
       databaseName: this.database.ref,
       tableInput: {
         name: "github_webhook_events",
