@@ -152,6 +152,45 @@ export class Analytics extends Construct {
       },
     });
 
+    // Create a Glue view for daily issue creation count
+    new glue.CfnTable(this, "DailyIssueCountView", {
+      catalogId: Stack.of(this).account,
+      databaseName: this.database.ref,
+      tableInput: {
+        name: "daily_issue_creation",
+        description: "Daily count of created issues",
+        tableType: "VIRTUAL_VIEW",
+        parameters: {
+          presto_view: "true",
+          comment: "Glue table for daily GitHub issue creation counts",
+        },
+        viewExpandedText: `SELECT 
+          CONCAT(year, '-', month, '-', day) AS date_str,
+          CAST(CONCAT(year, '-', month, '-', day) AS date) AS issue_date,
+          COUNT(*) AS issues_created
+        FROM 
+          "${this.database.ref}"."${webhookTable.ref}"
+        WHERE 
+          event_type = 'issues'
+          AND action = 'opened'
+        GROUP BY 
+          year, month, day
+        ORDER BY 
+          issue_date`,
+        storageDescriptor: {
+          columns: [
+            { name: "date_str", type: "string" },
+            { name: "issue_date", type: "date" },
+            { name: "issues_created", type: "bigint" },
+          ],
+          // SerdeとInputFormatの情報はビューに必要
+          serdeInfo: {},
+          inputFormat: "",
+          outputFormat: "",
+        },
+      },
+    });
+
     // Create Athena workgroup
     this.workgroup = new athena.CfnWorkGroup(this, "GitHubWebhooksWorkgroup", {
       name: "github-webhooks-workgroup",
@@ -170,31 +209,7 @@ export class Analytics extends Construct {
       },
     });
 
-    // Create a view for daily issue creation count
-    new athena.CfnNamedQuery(this, "CreateDailyIssueCountView", {
-      database: this.database.ref,
-      name: "Create Daily Issue Count View",
-      description: "Creates a view for daily issue creation metrics",
-      queryString: `
-        CREATE OR REPLACE VIEW daily_issue_creation AS
-        SELECT 
-          CONCAT(year, '-', month, '-', day) AS date_str,
-          CAST(CONCAT(year, '-', month, '-', day) AS date) AS issue_date,
-          COUNT(*) AS issues_created
-        FROM 
-          "${this.database.ref}"."${webhookTable.ref}"
-        WHERE 
-          event_type = 'issues'
-          AND action = 'opened'
-        GROUP BY 
-          year, month, day
-        ORDER BY 
-          issue_date;
-      `,
-      workGroup: this.workgroup.ref,
-    });
-
-    // Add a query to select from the view
+    // 不要になったNamedQueryを削除し、代わりにビューからデータを取得するクエリを作成
     new athena.CfnNamedQuery(this, "DailyIssueCountQuery", {
       database: this.database.ref,
       name: "Daily Issue Creation Count",
