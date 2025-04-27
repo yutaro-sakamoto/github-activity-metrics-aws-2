@@ -129,7 +129,25 @@ export class Analytics extends Construct {
         { name: "month", type: glue.Schema.STRING },
         { name: "day", type: glue.Schema.STRING },
       ],
+      parameters: {
+        "projection.enabled": "true",
+        "storage.location.template":
+          `s3://${dataBucket.bucketName}` +
+          "/github-webhooks/year=${year}/month=${month}/day=${day}/",
+        "projection.year.type": "integer",
+        "projection.year.range": "2000,2100",
+        "projection.month.type": "integer",
+        "projection.month.range": "1,12",
+        "projection.month.digits": "2",
+        "projection.day.type": "integer",
+        "projection.day.range": "1,31",
+        "projection.day.digits": "2",
+      },
       dataFormat: glue.DataFormat.PARQUET,
+      compressed: true,
+      storageParameters: [
+        glue.StorageParameter.compressionType(glue.CompressionType.SNAPPY),
+      ],
     });
 
     // 特定のテーブルに対するアクセス許可を付与
@@ -196,14 +214,6 @@ export class Analytics extends Construct {
             ParquetSerDe: { Compression: "SNAPPY" },
           },
         },
-      },
-    );
-
-    cfnFirehoseStream.addPropertyOverride(
-      "ExtendedS3DestinationConfiguration.BufferingHints",
-      {
-        IntervalInSeconds: 60,
-        SizeInMBs: 64,
       },
     );
   }

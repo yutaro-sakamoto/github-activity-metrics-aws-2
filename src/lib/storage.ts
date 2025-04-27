@@ -69,7 +69,7 @@ export class Storage extends Construct {
       dataOutputPrefix: s3Prefix,
       errorOutputPrefix: errorPrefix,
       bufferingInterval: Duration.minutes(1),
-      bufferingSize: Size.mebibytes(5),
+      bufferingSize: Size.mebibytes(64),
     });
 
     this.firehoseSchemaRole = new iam.Role(this, "FirehoseSchemaRole", {
