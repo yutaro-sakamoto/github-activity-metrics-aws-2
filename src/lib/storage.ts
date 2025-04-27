@@ -1,10 +1,11 @@
-import { RemovalPolicy, Duration } from "aws-cdk-lib";
-import * as iam from "aws-cdk-lib/aws-iam";
+import { RemovalPolicy, Duration, Size } from "aws-cdk-lib";
 import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
-import * as logs from "aws-cdk-lib/aws-logs";
+//import * as destinations from "aws-cdk-lib/aws-kinesisfirehose-destinations";
+//import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
+import * as iam from "aws-cdk-lib/aws-iam";
 
 export class Storage extends Construct {
   /**
@@ -15,7 +16,12 @@ export class Storage extends Construct {
   /**
    * Firehose delivery stream
    */
-  public readonly deliveryStream: firehose.CfnDeliveryStream;
+  public readonly deliveryStream: firehose.DeliveryStream;
+
+  /**
+   * IAM role for Firehose schema
+   */
+  public readonly firehoseSchemaRole: iam.Role;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -51,70 +57,43 @@ export class Storage extends Construct {
       ],
     });
 
-    // Log group for Firehose
-    const firehoseLogGroup = new logs.LogGroup(this, "FirehoseLogGroup", {
-      logGroupName: "/aws/kinesisfirehose/github-webhook-delivery",
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: RemovalPolicy.DESTROY,
+    // Athenaに最適なパーティショニングを設定
+    const s3Prefix =
+      "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/";
+    const errorPrefix =
+      "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/";
+
+    // S3宛先の設定
+    const s3Destination = new firehose.S3Bucket(this.dataBucket, {
+      compression: firehose.Compression.UNCOMPRESSED, // Parquet変換時はUNCOMPRESSEDに設定
+      dataOutputPrefix: s3Prefix,
+      errorOutputPrefix: errorPrefix,
+      bufferingInterval: Duration.minutes(1),
+      bufferingSize: Size.mebibytes(5),
     });
 
-    // IAM role for Firehose
-    const firehoseRole = new iam.Role(this, "FirehoseRole", {
+    this.firehoseSchemaRole = new iam.Role(this, "FirehoseSchemaRole", {
       assumedBy: new iam.ServicePrincipal("firehose.amazonaws.com"),
+      inlinePolicies: {
+        catalogPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["glue:GetTableVersions"],
+              resources: ["*"],
+            }),
+          ],
+        }),
+      },
     });
 
-    // Grant log writing permissions to Firehose
-    firehoseLogGroup.grantWrite(firehoseRole);
-
-    // Grant S3 writing permissions to Firehose
-    this.dataBucket.grantWrite(firehoseRole);
-
-    // Kinesis Data Firehose - Save data to S3
-    this.deliveryStream = new firehose.CfnDeliveryStream(
+    // DeliveryStreamを作成（L2コンストラクト）
+    this.deliveryStream = new firehose.DeliveryStream(
       this,
       "GitHubWebhookDeliveryStream",
       {
         deliveryStreamName: "github-webhook-delivery-stream",
-        deliveryStreamType: "DirectPut",
-        // Enable server-side encryption
-        deliveryStreamEncryptionConfigurationInput: {
-          keyType: "AWS_OWNED_CMK",
-        },
-        extendedS3DestinationConfiguration: {
-          bucketArn: this.dataBucket.bucketArn,
-          roleArn: firehoseRole.roleArn,
-          bufferingHints: {
-            intervalInSeconds: 60, // Buffer every 1 minute
-            sizeInMBs: 5, // Or every 5MB
-          },
-          // Athenaに最適なパーティショニングを適用
-          prefix:
-            "github-webhooks/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
-          errorOutputPrefix:
-            "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/",
-          compressionFormat: "GZIP",
-          // データ変換とフォーマット
-          dataFormatConversionConfiguration: {
-            enabled: false, // 現在のJSON形式を維持（必要に応じてParquetに変更可能）
-          },
-          // S3の最適化設定
-          s3BackupConfiguration: {
-            bucketArn: this.dataBucket.bucketArn,
-            roleArn: firehoseRole.roleArn,
-            prefix: "backup/",
-            bufferingHints: {
-              intervalInSeconds: 300,
-              sizeInMBs: 5,
-            },
-            compressionFormat: "GZIP",
-          },
-          s3BackupMode: "Disabled", // 必要に応じて有効化
-          cloudWatchLoggingOptions: {
-            enabled: true,
-            logGroupName: firehoseLogGroup.logGroupName,
-            logStreamName: "S3Delivery",
-          },
-        },
+        destination: s3Destination,
+        encryption: firehose.StreamEncryption.awsOwnedKey(),
       },
     );
 

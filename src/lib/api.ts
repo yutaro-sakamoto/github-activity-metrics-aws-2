@@ -1,7 +1,6 @@
 import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigatewayv2_integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
-import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
@@ -51,11 +50,6 @@ export class Api extends Construct {
       },
     ]);
 
-    // CloudWatch log group for API Gateway access logs
-    const apiGatewayLogGroup = new logs.LogGroup(this, "ApiGatewayAccessLogs", {
-      retention: logs.RetentionDays.ONE_MONTH,
-    });
-
     // HTTP API Gateway (for GitHub Webhooks)
     this.api = new apigatewayv2.HttpApi(this, "GitHubWebhookApi", {
       apiName: "GitHub Webhook API",
@@ -88,31 +82,23 @@ export class Api extends Construct {
     });
 
     // 明示的なステージを作成
-    new apigatewayv2.CfnStage(this, "V2Stage", {
+    const stage = new apigatewayv2.CfnStage(this, "V2Stage", {
       apiId: this.api.apiId,
       stageName: "v2",
       autoDeploy: true, // APIの変更が自動的にデプロイされるよう設定
-      accessLogSettings: {
-        destinationArn: apiGatewayLogGroup.logGroupArn,
-        format: JSON.stringify({
-          requestId: "$context.requestId",
-          ip: "$context.identity.sourceIp",
-          caller: "$context.identity.caller",
-          user: "$context.identity.user",
-          requestTime: "$context.requestTime",
-          httpMethod: "$context.httpMethod",
-          resourcePath: "$context.resourcePath",
-          status: "$context.status",
-          protocol: "$context.protocol",
-          responseLength: "$context.responseLength",
-        }),
-      },
       defaultRouteSettings: {
         throttlingBurstLimit: 100,
         throttlingRateLimit: 50,
         detailedMetricsEnabled: true,
       },
     });
+
+    NagSuppressions.addResourceSuppressions(stage, [
+      {
+        id: "AwsSolutions-APIG1",
+        reason: "API Gateway stage does not have access logs enabled",
+      },
+    ]);
 
     // Store webhook URL with stage name
     this.webhookUrl = `${this.api.apiEndpoint}/v2/webhooks`;

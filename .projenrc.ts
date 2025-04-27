@@ -10,6 +10,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     '@aws-sdk/client-ssm',
     '@aws-sdk/client-firehose',
     '@octokit/webhooks',
+    '@aws-cdk/aws-glue-alpha',
   ],
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
   // devDeps: [],             /* Build dependencies for this module. */

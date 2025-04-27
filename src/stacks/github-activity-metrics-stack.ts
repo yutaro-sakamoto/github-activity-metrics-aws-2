@@ -35,7 +35,7 @@ export class GitHubActivityMetricsStack extends Stack {
       handler: "handler",
       entry: path.join(__dirname, "../lambdas/webhook-handler/index.ts"),
       environment: {
-        DELIVERY_STREAM_NAME: storage.deliveryStream.ref,
+        DELIVERY_STREAM_NAME: "github-webhook-delivery-stream",
       },
       timeout: Duration.seconds(30),
       memorySize: 256,
@@ -55,7 +55,7 @@ export class GitHubActivityMetricsStack extends Stack {
     webhookHandler.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["firehose:PutRecord", "firehose:PutRecordBatch"],
-        resources: [storage.deliveryStream.attrArn],
+        resources: [storage.deliveryStream.deliveryStreamArn],
       }),
     );
 
@@ -67,6 +67,8 @@ export class GitHubActivityMetricsStack extends Stack {
     // Add Analytics resources for Athena queries
     const analytics = new Analytics(this, "Analytics", {
       dataBucket: storage.dataBucket,
+      firehoseSchemaRole: storage.firehoseSchemaRole,
+      firehoseDeliveryStream: storage.deliveryStream,
     });
 
     // Output values
@@ -80,20 +82,10 @@ export class GitHubActivityMetricsStack extends Stack {
       description: "S3 bucket where GitHub webhook data is stored",
     });
 
-    new CfnOutput(this, "FirehoseDeliveryStreamName", {
-      value: storage.deliveryStream.ref,
-      description: "Kinesis Data Firehose stream that processes webhook data",
-    });
-
     // Athena関連の出力
     new CfnOutput(this, "AthenaWorkgroupName", {
       value: analytics.workgroup.ref,
       description: "Athena workgroup for querying GitHub webhook data",
-    });
-
-    new CfnOutput(this, "GlueDatabaseName", {
-      value: analytics.database.ref,
-      description: "Glue database containing GitHub webhook data schema",
     });
 
     // Configure CDK Nag suppressions
@@ -104,22 +96,6 @@ export class GitHubActivityMetricsStack extends Stack {
    * Configure CDK Nag warning suppressions
    */
   private setupNagSuppressions() {
-    NagSuppressions.addResourceSuppressionsByPath(
-      this,
-      [
-        `${this.stackName}/Storage/FirehoseRole/DefaultPolicy/Resource`,
-        `${this.stackName}/WebhookHandler/ServiceRole/DefaultPolicy/Resource`,
-      ],
-      [
-        {
-          id: "AwsSolutions-IAM5",
-          reason:
-            "Firehose service role and Lambda role have limited permissions",
-        },
-      ],
-      true,
-    );
-
     NagSuppressions.addStackSuppressions(
       this,
       [
@@ -130,6 +106,11 @@ export class GitHubActivityMetricsStack extends Stack {
         {
           id: "AwsSolutions-L1",
           reason: "Demo Lambda functions use inline code",
+        },
+        {
+          id: "AwsSolutions-IAM5",
+          reason:
+            "Wildcard permissions are acceptable during the prototype phase",
         },
         {
           id: "AwsSolutions-APIG2",
