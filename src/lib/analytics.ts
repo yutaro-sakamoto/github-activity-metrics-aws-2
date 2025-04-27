@@ -1,5 +1,5 @@
 // filepath: /home/main/project/github-activity-metrics-aws/src/lib/analytics.ts
-import { RemovalPolicy, CfnOutput, Stack } from "aws-cdk-lib";
+import { RemovalPolicy, Stack } from "aws-cdk-lib";
 import * as athena from "aws-cdk-lib/aws-athena";
 import * as glue from "aws-cdk-lib/aws-glue";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -170,68 +170,41 @@ export class Analytics extends Construct {
       },
     });
 
-    // Prepared queries for common GitHub webhook analyses
-    new athena.CfnNamedQuery(this, "TopRepositoriesQuery", {
+    // Create a view for daily issue creation count
+    new athena.CfnNamedQuery(this, "CreateDailyIssueCountView", {
       database: this.database.ref,
-      name: "Most Active Repositories",
-      description: "Count of webhook events by repository",
+      name: "Create Daily Issue Count View",
+      description: "Creates a view for daily issue creation metrics",
       queryString: `
+        CREATE OR REPLACE VIEW daily_issue_creation AS
         SELECT 
-          repository.full_name AS repository_name, 
-          COUNT(*) AS event_count
+          CONCAT(year, '-', month, '-', day) AS date_str,
+          CAST(CONCAT(year, '-', month, '-', day) AS date) AS issue_date,
+          COUNT(*) AS issues_created
         FROM 
           "${this.database.ref}"."${webhookTable.ref}"
-        GROUP BY 
-          repository.full_name
-        ORDER BY 
-          event_count DESC
-        LIMIT 20;
-      `,
-      workGroup: this.workgroup.ref,
-    });
-
-    new athena.CfnNamedQuery(this, "EventTypeDistributionQuery", {
-      database: this.database.ref,
-      name: "Event Type Distribution",
-      description: "Distribution of different GitHub webhook event types",
-      queryString: `
-        SELECT 
-          event_type, 
-          COUNT(*) AS count
-        FROM 
-          "${this.database.ref}"."${webhookTable.ref}"
-        GROUP BY 
-          event_type
-        ORDER BY 
-          count DESC;
-      `,
-      workGroup: this.workgroup.ref,
-    });
-
-    new athena.CfnNamedQuery(this, "DailyActivityQuery", {
-      database: this.database.ref,
-      name: "Daily Activity",
-      description: "Count of webhook events by day",
-      queryString: `
-        SELECT 
-          year, 
-          month, 
-          day, 
-          COUNT(*) AS event_count
-        FROM 
-          "${this.database.ref}"."${webhookTable.ref}"
+        WHERE 
+          event_type = 'issues'
+          AND action = 'opened'
         GROUP BY 
           year, month, day
         ORDER BY 
-          year, month, day;
+          issue_date;
       `,
       workGroup: this.workgroup.ref,
     });
 
-    // Output the Athena query editor URL
-    new CfnOutput(this, "AthenaQueryEditorUrl", {
-      value: `https://console.aws.amazon.com/athena/home?region=${process.env.CDK_DEFAULT_REGION}#/workgroup/${this.workgroup.name}`,
-      description: "URL for Athena query editor to analyze GitHub webhook data",
+    // Add a query to select from the view
+    new athena.CfnNamedQuery(this, "DailyIssueCountQuery", {
+      database: this.database.ref,
+      name: "Daily Issue Creation Count",
+      description: "Returns the daily count of created issues",
+      queryString: `
+        SELECT *
+        FROM daily_issue_creation
+        ORDER BY issue_date;
+      `,
+      workGroup: this.workgroup.ref,
     });
   }
 }
