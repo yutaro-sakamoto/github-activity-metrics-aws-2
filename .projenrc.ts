@@ -11,6 +11,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     '@aws-sdk/client-firehose',
     '@octokit/webhooks',
     '@aws-cdk/aws-glue-alpha',
+    '@aws-sdk/client-timestream-write',
   ],
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
   // devDeps: [],             /* Build dependencies for this module. */

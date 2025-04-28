@@ -83,6 +83,10 @@
       "type": "runtime"
     },
     {
+      "name": "@aws-sdk/client-timestream-write",
+      "type": "runtime"
+    },
+    {
       "name": "@octokit/webhooks",
       "type": "runtime"
     },
