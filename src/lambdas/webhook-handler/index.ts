@@ -82,13 +82,6 @@ async function sendToTimestream(
       MeasureValueType: "BIGINT",
       Time: currentTime,
     },
-    {
-      Dimensions: commonDimensions,
-      MeasureName: "payload",
-      MeasureValue: data.payload,
-      MeasureValueType: "VARCHAR",
-      Time: currentTime,
-    },
   ];
 
   try {
