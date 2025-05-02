@@ -1,10 +1,13 @@
-import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
+import {
+  TimestreamWriteClient,
+  WriteRecordsCommand,
+} from "@aws-sdk/client-timestream-write";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { Webhooks } from "@octokit/webhooks";
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
-const firehoseClient = new FirehoseClient();
+const timestreamClient = new TimestreamWriteClient();
 
 // Function to retrieve secret from SSM Parameter Store
 async function getSecretFromParameterStore(
@@ -25,21 +28,81 @@ async function getSecretFromParameterStore(
   }
 }
 
-// Function to send data to Firehose
-async function sendToFirehose(data: any, deliveryStreamName: string) {
-  const params = {
-    DeliveryStreamName: deliveryStreamName,
-    Record: {
-      Data: Buffer.from(JSON.stringify(data)),
+// Function to send data to Timestream
+async function sendToTimestream(
+  data: any,
+  databaseName: string,
+  tableName: string,
+) {
+  // 現在のタイムスタンプをミリ秒単位で取得
+  const currentTime = Date.now().toString();
+
+  // 共通ディメンション（メタデータ）を作成
+  const commonDimensions = [
+    { Name: "event_type", Value: data.event_type },
+    { Name: "delivery_id", Value: data.delivery_id },
+  ];
+
+  // リポジトリ情報がある場合は追加
+  if (data.repository) {
+    commonDimensions.push(
+      { Name: "repository_id", Value: data.repository.id.toString() },
+      { Name: "repository_name", Value: data.repository.name },
+      { Name: "repository_full_name", Value: data.repository.full_name },
+    );
+  }
+
+  // 組織情報がある場合は追加
+  if (data.organization) {
+    commonDimensions.push(
+      { Name: "organization_id", Value: data.organization.id.toString() },
+      { Name: "organization_login", Value: data.organization.login },
+    );
+  }
+
+  // 送信者情報がある場合は追加
+  if (data.sender) {
+    commonDimensions.push(
+      { Name: "sender_id", Value: data.sender.id.toString() },
+      { Name: "sender_login", Value: data.sender.login },
+    );
+  }
+
+  // actionが存在する場合は追加
+  if (data.action) {
+    commonDimensions.push({ Name: "action", Value: data.action });
+  }
+
+  // レコードを作成
+  const records = [
+    {
+      Dimensions: commonDimensions,
+      MeasureName: "github_event",
+      MeasureValue: "1", // カウントとして1を記録
+      MeasureValueType: "BIGINT",
+      Time: currentTime,
     },
-  };
+    {
+      Dimensions: commonDimensions,
+      MeasureName: "payload",
+      MeasureValue: data.payload,
+      MeasureValueType: "VARCHAR",
+      Time: currentTime,
+    },
+  ];
 
   try {
-    const command = new PutRecordCommand(params);
-    const result = await firehoseClient.send(command);
+    const params = {
+      DatabaseName: databaseName,
+      TableName: tableName,
+      Records: records,
+    };
+
+    const command = new WriteRecordsCommand(params);
+    const result = await timestreamClient.send(command);
     return result;
   } catch (error) {
-    console.error("Error sending data to Firehose:", error);
+    console.error("Error sending data to Timestream:", error);
     throw error;
   }
 }
@@ -115,7 +178,7 @@ export const handler = async (event: any) => {
       };
     }
 
-    // メタデータを別途ロギングするが、Firehoseにはオリジナルデータをそのまま送信
+    // メタデータを別途ロギングする
     console.log("GitHub Webhook received:", {
       event_type: githubEvent,
       delivery_id: githubDelivery,
@@ -124,9 +187,7 @@ export const handler = async (event: any) => {
       sender: parsedBody.sender?.login,
     });
 
-    // 構造化されたデータをFirehoseに送信
-    // Athenaクエリでアクセスしやすいように重要なフィールドは最上位に配置し、
-    // 元のJSONデータ全体をpayloadフィールドに含める
+    // 構造化されたデータを作成
     const structuredData = {
       action: parsedBody.action,
       repository: parsedBody.repository
@@ -154,10 +215,11 @@ export const handler = async (event: any) => {
       payload: JSON.stringify(parsedBody),
     };
 
-    // 構造化されたデータをFirehoseに送信
-    const result = await sendToFirehose(
+    // 構造化されたデータをTimestreamに送信
+    await sendToTimestream(
       structuredData,
-      process.env.DELIVERY_STREAM_NAME!,
+      process.env.TIMESTREAM_DATABASE_NAME!,
+      process.env.TIMESTREAM_TABLE_NAME!,
     );
 
     // Return success response
@@ -165,7 +227,6 @@ export const handler = async (event: any) => {
       statusCode: 200,
       body: JSON.stringify({
         message: "Webhook received and processed successfully",
-        recordId: result.RecordId,
         eventType: githubEvent,
       }),
     };
