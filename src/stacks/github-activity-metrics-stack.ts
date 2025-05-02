@@ -14,8 +14,14 @@ export class GitHubActivityMetricsStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
 
+    const timestreamDatabaseName = "github_webhook_data";
+    const timestreamTableName = "github_events";
+
     // Create storage resources (Timestream database and table)
-    const storage = new Storage(this, "Storage");
+    const storage = new Storage(this, "Storage", {
+      databaseName: timestreamDatabaseName,
+      tableName: timestreamTableName,
+    });
 
     // Reference GitHub Webhook secret from SSM Parameter Store
     const webhookSecretParam =
@@ -34,8 +40,8 @@ export class GitHubActivityMetricsStack extends Stack {
       handler: "handler",
       entry: path.join(__dirname, "../lambdas/webhook-handler/index.ts"),
       environment: {
-        TIMESTREAM_DATABASE_NAME: storage.timestreamDatabase.ref,
-        TIMESTREAM_TABLE_NAME: storage.timestreamTable.ref,
+        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
+        TIMESTREAM_TABLE_NAME: timestreamTableName,
       },
       timeout: Duration.seconds(30),
       memorySize: 256,
@@ -57,9 +63,12 @@ export class GitHubActivityMetricsStack extends Stack {
     // Grant Timestream write permissions to the Lambda function
     webhookHandler.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["timestream:WriteRecords", "timestream:DescribeTable"],
+        //actions: ["timestream:WriteRecords", "timestream:DescribeTable", "timestream:DescribeDatabase"],
+        actions: ["timestream:*"],
         resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${storage.timestreamDatabase.ref}/table/${storage.timestreamTable.ref}`,
+          //`arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabaseName}/table/${timestreamTableName}`,
+          //`arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabaseName}`,
+          "*",
         ],
       }),
     );
