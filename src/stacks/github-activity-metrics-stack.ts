@@ -57,14 +57,17 @@ export class GitHubActivityMetricsStack extends Stack {
     // Grant Timestream write permissions to the Lambda function
     webhookHandler.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: [
-          "timestream:WriteRecords",
-          "timestream:DescribeTable",
-          "timestream:DescribeEndpoints",
-        ],
+        actions: ["timestream:WriteRecords", "timestream:DescribeTable"],
         resources: [
           `arn:aws:timestream:${this.region}:${this.account}:database/${storage.timestreamDatabase.ref}/table/${storage.timestreamTable.ref}`,
         ],
+      }),
+    );
+
+    webhookHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["timestream:DescribeEndpoints"],
+        resources: ["*"],
       }),
     );
 
