@@ -28,6 +28,39 @@ async function getSecretFromParameterStore(
   }
 }
 
+function getMeasure(event_type: string, payload: any): any {
+  switch (event_type) {
+    case "push": {
+      return {
+        measureName: "push",
+        measureValueType: "MULTI",
+        measureValues: [
+          {
+            Name: "push_after",
+            Type: "VARCHAR",
+            Value: payload.after,
+          },
+          {
+            Name: "push_ref",
+            Type: "VARCHAR",
+            Value: payload.ref,
+          },
+          {
+            Name: "push_created",
+            Type: "BOOLEAN",
+            Value: String(payload.created),
+          },
+        ],
+      };
+    }
+  }
+  return {
+    measureName: "dummyMeasure",
+    measureValueType: "BIGINT",
+    measureValue: 1,
+  };
+}
+
 // Function to send data to Timestream
 async function sendToTimestream(
   data: any,
@@ -73,16 +106,29 @@ async function sendToTimestream(
     commonDimensions.push({ Name: "action", Value: data.action });
   }
 
+  const measure = getMeasure(data.event_type, data.payload);
+
   // レコードを作成
-  const records = [
-    {
-      Dimensions: commonDimensions,
-      MeasureName: "github_event",
-      MeasureValue: "1", // カウントとして1を記録
-      MeasureValueType: "BIGINT",
-      Time: currentTime,
-    },
-  ];
+  const records =
+    "measureValue" in measure
+      ? [
+          {
+            Dimensions: commonDimensions,
+            MeasureName: measure.measureName,
+            MeasureValue: measure.measureValue,
+            MeasureValueType: measure.measureValueType,
+            Time: currentTime,
+          },
+        ]
+      : [
+          {
+            Dimensions: commonDimensions,
+            MeasureName: measure.measureName,
+            MeasureValues: measure.measureValues,
+            MeasureValueType: measure.measureValueType,
+            Time: currentTime,
+          },
+        ];
 
   try {
     const params = {
@@ -204,8 +250,7 @@ export const handler = async (event: any) => {
         : null,
       event_type: githubEvent,
       delivery_id: githubDelivery,
-      // webhookデータ全体をJSON文字列としてpayloadフィールドに格納
-      payload: JSON.stringify(parsedBody),
+      payload: parsedBody,
     };
 
     // 構造化されたデータをTimestreamに送信
