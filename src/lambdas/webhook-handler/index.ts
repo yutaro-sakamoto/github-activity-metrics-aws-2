@@ -4,6 +4,7 @@ import {
 } from "@aws-sdk/client-timestream-write";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { Webhooks } from "@octokit/webhooks";
+import { getMeasure } from "./measures";
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
@@ -26,39 +27,6 @@ async function getSecretFromParameterStore(
     console.error("Error fetching parameter from SSM:", error);
     throw error;
   }
-}
-
-function getMeasure(event_type: string, payload: any): any {
-  switch (event_type) {
-    case "push": {
-      return {
-        measureName: "push",
-        measureValueType: "MULTI",
-        measureValues: [
-          {
-            Name: "push_after",
-            Type: "VARCHAR",
-            Value: payload.after,
-          },
-          {
-            Name: "push_ref",
-            Type: "VARCHAR",
-            Value: payload.ref,
-          },
-          {
-            Name: "push_created",
-            Type: "BOOLEAN",
-            Value: String(payload.created),
-          },
-        ],
-      };
-    }
-  }
-  return {
-    measureName: "dummyMeasure",
-    measureValueType: "BIGINT",
-    measureValue: 1,
-  };
 }
 
 // Function to send data to Timestream
