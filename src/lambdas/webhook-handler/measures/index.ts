@@ -138,6 +138,67 @@ export function getMeasure(event_type: string, payload: any): measureType {
         measureValues: measureValues,
       };
     }
+    // https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review
+    case "pull_request_review": {
+      let measureValues: multiMeasureValuesType[] = [
+        {
+          Name: "pr_rv_action",
+          Type: "VARCHAR",
+          Value: payload.action,
+        },
+        {
+          Name: "pr_rv_review_author_association",
+          Type: "VARCHAR",
+          Value: payload.review.author_association,
+        },
+        {
+          Name: "pr_rv_review_commit_id",
+          Type: "VARCHAR",
+          Value: payload.review.commit_id,
+        },
+        {
+          Name: "pr_rv_review_id",
+          Type: "VARCHAR",
+          Value: String(payload.review.id),
+        },
+        {
+          Name: "pr_rv_review_state",
+          Type: "VARCHAR",
+          Value: payload.review.state,
+        },
+        {
+          Name: "pr_rv_review_submitted_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.review.submitted_at),
+        },
+      ];
+
+      if (payload.review.user) {
+        measureValues.push({
+          Name: "pr_rv_review_user_id",
+          Type: "BIGINT",
+          Value: String(payload.review.user.id),
+        });
+        measureValues.push({
+          Name: "pr_rv_review_user_login",
+          Type: "VARCHAR",
+          Value: payload.review.user.login,
+        });
+      }
+
+      add_pull_request_object_infomation(measureValues, payload, "pr_rv_");
+
+      return {
+        measureName: "pull_request",
+        measureValueType: "MULTI",
+        measureValues: measureValues,
+      };
+      return {
+        measureName: "pull_request",
+        measureValueType: "MULTI",
+        measureValues: measureValues,
+      };
+    }
   }
   return {
     measureName: "dummyMeasure",
@@ -147,8 +208,9 @@ export function getMeasure(event_type: string, payload: any): measureType {
 }
 
 /**
- * https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
- * のpull_requestオブジェクトの情報をTimestreamのメジャー定義に追加する
+ * * https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
+ * * https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_comment
+ * 上記3つのイベントのpull_requestオブジェクトの情報をTimestreamのメジャー定義に追加する
  * @param measureValues
  * @param payload GitHub Webhookのペイロード
  * @param prefix Nameのprefix
@@ -180,11 +242,6 @@ function add_pull_request_object_infomation(
       Value: payload.pull_request.base.sha,
     },
     {
-      Name: `${prefix}pr_commits`,
-      Type: "BIGINT",
-      Value: String(payload.pull_request.commits),
-    },
-    {
       Name: `${prefix}pr_created_at`,
       Type: "TIMESTAMP",
       Value: formatTimestamp(payload.pull_request.created_at),
@@ -210,11 +267,6 @@ function add_pull_request_object_infomation(
       Value: String(payload.pull_request.number),
     },
     {
-      Name: `${prefix}pr_rv_comments`,
-      Type: "BIGINT",
-      Value: String(payload.pull_request.review_comments),
-    },
-    {
       Name: `${prefix}pr_state`,
       Type: "VARCHAR",
       Value: payload.pull_request.state,
@@ -225,6 +277,22 @@ function add_pull_request_object_infomation(
       Value: formatTimestamp(payload.pull_request.updated_at),
     },
   );
+
+  if (payload.pull_request.commits) {
+    measureValues.push({
+      Name: `${prefix}pr_commits`,
+      Type: "BIGINT",
+      Value: String(payload.pull_request.commits),
+    });
+  }
+
+  if (payload.pull_request.review_comments) {
+    measureValues.push({
+      Name: `${prefix}pr_rv_comments`,
+      Type: "BIGINT",
+      Value: String(payload.pull_request.review_comments),
+    });
+  }
 
   if (payload.pull_request.assignee) {
     measureValues.push({
@@ -296,7 +364,10 @@ function add_pull_request_object_infomation(
     });
   }
 
-  if (payload.pull_request.merged !== null) {
+  if (
+    payload.pull_request.merged !== undefined &&
+    payload.pull_request.merged !== null
+  ) {
     measureValues.push({
       Name: `${prefix}pr_merged`,
       Type: "BOOLEAN",
