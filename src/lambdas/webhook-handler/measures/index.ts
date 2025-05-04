@@ -24,7 +24,7 @@ type measureTypeAtom =
 
 type multiMeasureValuesType = {
   Name: string;
-  Type: "BIGINT" | "DOUBLE" | "VARCHAR" | "BOOLEAN";
+  Type: "BIGINT" | "DOUBLE" | "VARCHAR" | "BOOLEAN" | "TIMESTAMP";
   Value: string;
 };
 
@@ -186,8 +186,8 @@ function add_pull_request_object_infomation(
     },
     {
       Name: `${prefix}pr_created_at`,
-      Type: "VARCHAR",
-      Value: String(payload.pull_request.created_at),
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.pull_request.created_at),
     },
     {
       Name: `${prefix}pr_draft`,
@@ -221,8 +221,8 @@ function add_pull_request_object_infomation(
     },
     {
       Name: `${prefix}pr_update_at`,
-      Type: "VARCHAR",
-      Value: payload.pull_request.updated_at,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.pull_request.updated_at),
     },
   );
 
@@ -283,8 +283,8 @@ function add_pull_request_object_infomation(
   if (payload.pull_request.closed_at) {
     measureValues.push({
       Name: `${prefix}pr_closed_at`,
-      Type: "VARCHAR",
-      Value: payload.pull_request.closed_at,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.pull_request.closed_at),
     });
   }
 
@@ -307,16 +307,16 @@ function add_pull_request_object_infomation(
   if (payload.pull_request.merged_at) {
     measureValues.push({
       Name: `${prefix}pr_merged_at`,
-      Type: "VARCHAR",
-      Value: String(payload.pull_request.merged_at),
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.pull_request.merged_at),
     });
   }
 
   if (payload.pull_request.merged_at) {
     measureValues.push({
       Name: `${prefix}pr_merged_at`,
-      Type: "VARCHAR",
-      Value: payload.pull_request.merged_at,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.pull_request.merged_at),
     });
   }
 
@@ -332,4 +332,15 @@ function add_pull_request_object_infomation(
       Value: payload.pull_request.user.login,
     });
   }
+}
+
+/**
+ * ISO 8601形式の時刻文字列をUnixエポックからのミリ秒精度の時間に変換する
+ *
+ * @param isoTimestamp ISO 8601形式のタイムスタンプ文字列（例: 2025-05-04T10:41:38Z）
+ * @returns Unixエポックからミリ秒数を表す文字列
+ */
+export function formatTimestamp(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+  return String(date.getTime());
 }
