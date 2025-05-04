@@ -75,6 +75,7 @@ async function sendToTimestream(
   }
 
   const measure = getMeasure(data.event_type, data.payload);
+  console.log("Measure:", measure);
 
   // レコードを作成
   const records =

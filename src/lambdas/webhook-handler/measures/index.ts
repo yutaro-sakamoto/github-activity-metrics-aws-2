@@ -22,16 +22,18 @@ type measureTypeAtom =
       measureValue: boolean;
     };
 
+type multiMeasureValuesType = {
+  Name: string;
+  Type: "BIGINT" | "DOUBLE" | "VARCHAR" | "BOOLEAN";
+  Value: string;
+};
+
 type measureType =
   | measureTypeAtom
   | {
       measureName: string;
       measureValueType: "MULTI";
-      measureValues: {
-        Name: string;
-        Type: "BIGINT" | "DOUBLE" | "VARCHAR" | "BOOLEAN";
-        Value: string;
-      }[];
+      measureValues: multiMeasureValuesType[];
     };
 
 /**
@@ -42,27 +44,61 @@ type measureType =
  */
 export function getMeasure(event_type: string, payload: any): measureType {
   switch (event_type) {
+    // https://docs.github.com/en/webhooks/webhook-events-and-payloads#push
     case "push": {
+      let measureValues: multiMeasureValuesType[] = [
+        {
+          Name: "push_after",
+          Type: "VARCHAR",
+          Value: payload.after,
+        },
+        {
+          Name: "push_before",
+          Type: "VARCHAR",
+          Value: payload.before,
+        },
+        {
+          Name: "push_commits_length",
+          Type: "BIGINT",
+          Value: String(payload.commits.length),
+        },
+        {
+          Name: "push_created",
+          Type: "BOOLEAN",
+          Value: String(payload.created),
+        },
+        {
+          Name: "push_deleted",
+          Type: "BOOLEAN",
+          Value: String(payload.deleted),
+        },
+        {
+          Name: "push_forced",
+          Type: "BOOLEAN",
+          Value: String(payload.forced),
+        },
+        {
+          Name: "push_pusher_name",
+          Type: "VARCHAR",
+          Value: payload.pusher.name,
+        },
+        {
+          Name: "push_ref",
+          Type: "VARCHAR",
+          Value: payload.ref,
+        },
+      ];
+      if (payload.base_ref) {
+        measureValues.push({
+          Name: "push_base_ref",
+          Type: "VARCHAR",
+          Value: payload.base_ref,
+        });
+      }
       return {
         measureName: "push",
         measureValueType: "MULTI",
-        measureValues: [
-          {
-            Name: "push_after",
-            Type: "VARCHAR",
-            Value: payload.after,
-          },
-          {
-            Name: "push_ref",
-            Type: "VARCHAR",
-            Value: payload.ref,
-          },
-          {
-            Name: "push_created",
-            Type: "BOOLEAN",
-            Value: String(payload.created),
-          },
-        ],
+        measureValues: measureValues,
       };
     }
   }
