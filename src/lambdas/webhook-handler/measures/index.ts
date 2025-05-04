@@ -5,22 +5,11 @@
 // The definition of measureType is based on the Timestream data types.
 // See https://docs.aws.amazon.com/ja_jp/timestream/latest/developerguide/writes.html#writes.data-types for detail.
 
-type measureTypeAtom =
-  | {
-      measureName: string;
-      measureValueType: "BIGINT" | "DOUBLE";
-      measureValue: number;
-    }
-  | {
-      measureName: string;
-      measureValueType: "VARCHAR";
-      measureValue: string;
-    }
-  | {
-      measureName: string;
-      measureValueType: "BOOLEAN";
-      measureValue: boolean;
-    };
+type measureTypeAtom = {
+  measureName: string;
+  measureValueType: "BIGINT" | "DOUBLE" | "VARCHAR" | "BOOLEAN";
+  measureValue: string;
+};
 
 type multiMeasureValuesType = {
   Name: string;
@@ -199,11 +188,41 @@ export function getMeasure(event_type: string, payload: any): measureType {
         measureValues: measureValues,
       };
     }
+    case "issues": {
+      let measureValues: multiMeasureValuesType[] = [
+        {
+          Name: "issues_action",
+          Type: "VARCHAR",
+          Value: payload.action,
+        },
+      ];
+      if (payload.assignee) {
+        measureValues.push(
+          {
+            Name: "issues_assignee_login",
+            Type: "VARCHAR",
+            Value: payload.assignee.login,
+          },
+          {
+            Name: "issues_assignee_id",
+            Type: "BIGINT",
+            Value: String(payload.assignee.id),
+          },
+        );
+      }
+
+      add_issue_object_infomation(measureValues, payload, "issues_");
+      return {
+        measureName: "issue",
+        measureValueType: "MULTI",
+        measureValues: measureValues,
+      };
+    }
   }
   return {
     measureName: "dummyMeasure",
     measureValueType: "BIGINT",
-    measureValue: 1,
+    measureValue: "1",
   };
 }
 
@@ -414,4 +433,148 @@ function add_pull_request_object_infomation(
 export function formatTimestamp(isoTimestamp: string): string {
   const date = new Date(isoTimestamp);
   return String(date.getTime());
+}
+
+/**
+ *
+ * @param measureValues
+ * @param payload
+ * @param prefix
+ */
+function add_issue_object_infomation(
+  measureValues: multiMeasureValuesType[],
+  payload: any,
+  prefix: string,
+) {
+  if (payload.issue.asignee) {
+    measureValues.push(
+      {
+        Name: `${prefix}issue_assignee_login`,
+        Type: "VARCHAR",
+        Value: payload.issue.assignee.login,
+      },
+      {
+        Name: `${prefix}issue_assignee_id`,
+        Type: "BIGINT",
+        Value: String(payload.issue.assignee.id),
+      },
+    );
+  }
+  let asignee_length = payload.issue.assignees.length;
+  measureValues.push({
+    Name: `${prefix}issue_assignees_length`,
+    Type: "BIGINT",
+    Value: String(asignee_length),
+  });
+  for (let i = 0; i < Math.min(asignee_length, 5); i++) {
+    measureValues.push(
+      {
+        Name: `${prefix}issue_assignees_${i}_login`,
+        Type: "VARCHAR",
+        Value: payload.issue.assignees[i].login,
+      },
+      {
+        Name: `${prefix}issue_assignees_${i}_id`,
+        Type: "BIGINT",
+        Value: String(payload.issue.assignees[i].id),
+      },
+    );
+  }
+  measureValues.push({
+    Name: `${prefix}issue_author_association`,
+    Type: "VARCHAR",
+    Value: payload.issue.author_association,
+  });
+  if (payload.issue.closed_at) {
+    measureValues.push({
+      Name: `${prefix}issue_closed_at`,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.issue.closed_at),
+    });
+  }
+  measureValues.push({
+    Name: `${prefix}issue_comments`,
+    Type: "BIGINT",
+    Value: String(payload.issue.comments),
+  });
+  if (payload.issue.created_at) {
+    measureValues.push({
+      Name: `${prefix}issue_created_at`,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.issue.created_at),
+    });
+  }
+  if (payload.issue.draft !== undefined && payload.issue.draft !== null) {
+    measureValues.push({
+      Name: `${prefix}issue_draft`,
+      Type: "BOOLEAN",
+      Value: String(payload.issue.draft),
+    });
+  }
+  measureValues.push({
+    Name: `${prefix}issue_id`,
+    Type: "BIGINT",
+    Value: String(payload.issue.id),
+  });
+  let labels_length = payload.issue.labels.length;
+  measureValues.push({
+    Name: `${prefix}issue_labels_length`,
+    Type: "BIGINT",
+    Value: String(labels_length),
+  });
+  for (let i = 0; i < Math.min(labels_length, 5); i++) {
+    measureValues.push(
+      {
+        Name: `${prefix}issue_labels_${i}_name`,
+        Type: "VARCHAR",
+        Value: payload.issue.labels[i].name,
+      },
+      {
+        Name: `${prefix}issue_labels_${i}_id`,
+        Type: "BIGINT",
+        Value: String(payload.issue.labels[i].id),
+      },
+      {
+        Name: `${prefix}issue_labels_${i}_default`,
+        Type: "BOOLEAN",
+        Value: String(payload.issue.labels[i].default),
+      },
+    );
+  }
+  measureValues.push({
+    Name: `${prefix}issue_locked`,
+    Type: "BOOLEAN",
+    Value: String(payload.issue.locked),
+  });
+  measureValues.push({
+    Name: `${prefix}issue_number`,
+    Type: "BIGINT",
+    Value: String(payload.issue.number),
+  });
+  measureValues.push({
+    Name: `${prefix}issue_state`,
+    Type: "VARCHAR",
+    Value: payload.issue.state,
+  });
+  if (payload.issue.updated_at) {
+    measureValues.push({
+      Name: `${prefix}issue_updated_at`,
+      Type: "TIMESTAMP",
+      Value: formatTimestamp(payload.issue.updated_at),
+    });
+  }
+  if (payload.issue.user) {
+    measureValues.push(
+      {
+        Name: `${prefix}issue_user_id`,
+        Type: "BIGINT",
+        Value: String(payload.issue.user.id),
+      },
+      {
+        Name: `${prefix}issue_user_login`,
+        Type: "VARCHAR",
+        Value: payload.issue.user.login,
+      },
+    );
+  }
 }
