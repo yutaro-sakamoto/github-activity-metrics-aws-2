@@ -1,5 +1,5 @@
 /**
- * GitHub イベントタイプに基づいて Timestream のメジャー定義を返す
+ * Returns Timestream measure definitions based on GitHub event types
  */
 
 // The definition of measureType is based on the Timestream data types.
@@ -26,10 +26,10 @@ type measureType =
     };
 
 /**
- * イベントタイプに応じたメジャー定義を取得する
- * @param event_type GitHubイベントタイプ
- * @param payload GitHubイベントのペイロードデータ
- * @returns Timestreamメジャー定義
+ * Get measure definition based on event type
+ * @param event_type GitHub event type
+ * @param payload GitHub event payload data
+ * @returns Timestream measure definition
  */
 export function getMeasure(event_type: string, payload: any): measureType {
   switch (event_type) {
@@ -388,12 +388,14 @@ export function getMeasure(event_type: string, payload: any): measureType {
 }
 
 /**
+ * Add information from pull_request object to Timestream measure definitions
+ * Based on:
  * * https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
  * * https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_comment
- * 上記3つのイベントのpull_requestオブジェクトの情報をTimestreamのメジャー定義に追加する
- * @param measureValues
- * @param payload GitHub Webhookのペイロード
- * @param prefix Nameのprefix
+ *
+ * @param measureValues Array of measure values to add data to
+ * @param payload GitHub Webhook payload
+ * @param prefix Prefix to add to the Name field
  */
 function add_pull_request_object_infomation(
   measureValues: multiMeasureValuesType[],
@@ -586,10 +588,10 @@ function add_pull_request_object_infomation(
 }
 
 /**
- * ISO 8601形式の時刻文字列をUnixエポックからのミリ秒精度の時間に変換する
+ * Converts an ISO 8601 formatted timestamp string to milliseconds since Unix epoch
  *
- * @param isoTimestamp ISO 8601形式のタイムスタンプ文字列（例: 2025-05-04T10:41:38Z）
- * @returns Unixエポックからミリ秒数を表す文字列
+ * @param isoTimestamp ISO 8601 formatted timestamp string (e.g. 2025-05-04T10:41:38Z)
+ * @returns String representing milliseconds since Unix epoch
  */
 export function formatTimestamp(isoTimestamp: string): string {
   const date = new Date(isoTimestamp);
@@ -597,10 +599,13 @@ export function formatTimestamp(isoTimestamp: string): string {
 }
 
 /**
+ * Add information from issue object to Timestream measure definitions
+ * Based on:
+ * * https://docs.github.com/en/webhooks/webhook-events-and-payloads#issues
  *
- * @param measureValues
- * @param payload
- * @param prefix
+ * @param measureValues Array of measure values to add data to
+ * @param payload GitHub Webhook payload
+ * @param prefix Prefix to add to the Name field
  */
 function add_issue_object_infomation(
   measureValues: multiMeasureValuesType[],

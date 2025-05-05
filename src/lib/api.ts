@@ -54,7 +54,7 @@ export class Api extends Construct {
     this.api = new apigatewayv2.HttpApi(this, "GitHubWebhookApi", {
       apiName: "GitHub Webhook API",
       description: "API for receiving GitHub webhooks",
-      createDefaultStage: false, // デフォルトステージを作成しない
+      createDefaultStage: false, // Do not create default stage
       corsPreflight: {
         allowOrigins: ["*"],
         allowMethods: [apigatewayv2.CorsHttpMethod.POST],
@@ -83,11 +83,11 @@ export class Api extends Construct {
 
     const stageName = "v2";
 
-    // 明示的なステージを作成
+    // Create explicit stage
     const stage = new apigatewayv2.CfnStage(this, "V2Stage", {
       apiId: this.api.apiId,
       stageName: stageName,
-      autoDeploy: true, // APIの変更が自動的にデプロイされるよう設定
+      autoDeploy: true, // Configure automatic deployment of API changes
       defaultRouteSettings: {
         throttlingBurstLimit: 100,
         throttlingRateLimit: 50,

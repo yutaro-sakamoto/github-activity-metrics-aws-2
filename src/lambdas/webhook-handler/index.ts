@@ -46,16 +46,16 @@ async function sendToTimestream(
   databaseName: string,
   tableName: string,
 ) {
-  // 現在のタイムスタンプをミリ秒単位で取得
+  // Get current timestamp in milliseconds
   const currentTime = Date.now().toString();
 
-  // 共通ディメンション（メタデータ）を作成
+  // Create common dimensions (metadata)
   const commonDimensions = [
     { Name: "event_type", Value: data.event_type },
     { Name: "delivery_id", Value: data.delivery_id },
   ];
 
-  // リポジトリ情報がある場合は追加
+  // Add repository information if it exists
   if (data.repository) {
     commonDimensions.push(
       { Name: "repository_id", Value: data.repository.id.toString() },
@@ -64,7 +64,7 @@ async function sendToTimestream(
     );
   }
 
-  // 組織情報がある場合は追加
+  // Add organization information if it exists
   if (data.organization) {
     commonDimensions.push(
       { Name: "organization_id", Value: data.organization.id.toString() },
@@ -72,7 +72,7 @@ async function sendToTimestream(
     );
   }
 
-  // 送信者情報がある場合は追加
+  // Add sender information if it exists
   if (data.sender) {
     commonDimensions.push(
       { Name: "sender_id", Value: data.sender.id.toString() },
@@ -80,7 +80,7 @@ async function sendToTimestream(
     );
   }
 
-  // actionが存在する場合は追加
+  // Add action if it exists
   if (data.action) {
     commonDimensions.push({ Name: "action", Value: data.action });
   }
@@ -88,7 +88,7 @@ async function sendToTimestream(
   const measure = getMeasure(data.event_type, data.payload);
   console.log("Measure:", measure);
 
-  // レコードを作成
+  // Create records
   const records =
     "measureValue" in measure
       ? [
@@ -225,7 +225,7 @@ export const handler = async (event: any) => {
       };
     }
 
-    // メタデータを別途ロギングする
+    // Log metadata separately
     console.log("GitHub Webhook received:", {
       event_type: githubEvent,
       delivery_id: githubDelivery,
@@ -234,7 +234,7 @@ export const handler = async (event: any) => {
       sender: parsedBody.sender?.login,
     });
 
-    // 構造化されたデータを作成
+    // Create structured data
     const structuredData = {
       action: parsedBody.action,
       repository: parsedBody.repository
@@ -261,7 +261,7 @@ export const handler = async (event: any) => {
       payload: parsedBody,
     };
 
-    // 構造化されたデータをTimestreamに送信
+    // Send structured data to Timestream
     await sendToTimestream(
       structuredData,
       process.env.TIMESTREAM_DATABASE_NAME!,
