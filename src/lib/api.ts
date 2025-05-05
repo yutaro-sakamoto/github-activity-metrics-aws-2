@@ -81,10 +81,12 @@ export class Api extends Construct {
       integration: webhookIntegration,
     });
 
+    const stageName = "v2";
+
     // 明示的なステージを作成
     const stage = new apigatewayv2.CfnStage(this, "V2Stage", {
       apiId: this.api.apiId,
-      stageName: "v2",
+      stageName: stageName,
       autoDeploy: true, // APIの変更が自動的にデプロイされるよう設定
       defaultRouteSettings: {
         throttlingBurstLimit: 100,
@@ -101,6 +103,6 @@ export class Api extends Construct {
     ]);
 
     // Store webhook URL with stage name
-    this.webhookUrl = `${this.api.apiEndpoint}/v2/webhooks`;
+    this.webhookUrl = `${this.api.apiEndpoint}/${stageName}/webhooks`;
   }
 }
