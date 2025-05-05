@@ -12,6 +12,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     '@octokit/webhooks',
     '@aws-cdk/aws-glue-alpha',
     '@aws-sdk/client-timestream-write',
+    'ip-range-check',
   ],
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
   // devDeps: [],             /* Build dependencies for this module. */

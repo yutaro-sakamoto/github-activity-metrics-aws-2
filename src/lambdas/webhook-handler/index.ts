@@ -4,7 +4,18 @@ import {
 } from "@aws-sdk/client-timestream-write";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { Webhooks } from "@octokit/webhooks";
+import ipRangeCheck from "ip-range-check";
 import { getMeasure } from "./measures";
+
+// Define GitHub IP ranges
+const GITHUB_IP_RANGES = [
+  "192.30.252.0/22",
+  "185.199.108.0/22",
+  "140.82.112.0/20",
+  "143.55.64.0/20",
+  "2a0a:a440::/29",
+  "2606:50c0::/32",
+];
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
@@ -120,6 +131,34 @@ export const handler = async (event: any) => {
   console.log("Received webhook event");
 
   try {
+    // Check source IP address
+    const sourceIp =
+      event.requestContext?.identity?.sourceIp ||
+      event.requestContext?.http?.sourceIp;
+
+    console.log(`Request from source IP: ${sourceIp}`);
+
+    // Validate IP is from GitHub
+    if (sourceIp) {
+      const isGitHubIp = GITHUB_IP_RANGES.some((range) =>
+        ipRangeCheck(sourceIp, range),
+      );
+
+      if (!isGitHubIp) {
+        console.warn(`Blocked request from unauthorized IP: ${sourceIp}`);
+        return {
+          statusCode: 403,
+          body: JSON.stringify({
+            message: "Access denied: Source IP not allowed",
+          }),
+        };
+      }
+
+      console.log(`Confirmed request from authorized GitHub IP: ${sourceIp}`);
+    } else {
+      console.warn("Source IP could not be determined from the request");
+    }
+
     // Get request body and headers
     let body = event.body;
     const headers = event.headers || {};
