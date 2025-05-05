@@ -218,6 +218,167 @@ export function getMeasure(event_type: string, payload: any): measureType {
         measureValues: measureValues,
       };
     }
+    // https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run
+    case "workflow_run": {
+      let measureValues: multiMeasureValuesType[] = [];
+      measureValues.push({
+        Name: "wf_run_action",
+        Type: "VARCHAR",
+        Value: payload.action,
+      });
+      // workflow object
+      measureValues.push(
+        {
+          Name: "wf_run_wf_created_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.workflow.created_at),
+        },
+        {
+          Name: "wf_run_wf_id",
+          Type: "BIGINT",
+          Value: String(payload.workflow.id),
+        },
+        {
+          Name: "wf_run_wf_name",
+          Type: "VARCHAR",
+          Value: payload.workflow.name,
+        },
+        {
+          Name: "wf_run_wf_path",
+          Type: "VARCHAR",
+          Value: payload.workflow.path,
+        },
+        {
+          Name: "wf_run_wf_state",
+          Type: "VARCHAR",
+          Value: payload.workflow.state,
+        },
+        {
+          Name: "wf_run_wf_updated_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.workflow.updated_at),
+        },
+      );
+      // workflow_run object
+      measureValues.push(
+        {
+          Name: "wf_run_wf_run_actor_id",
+          Type: "BIGINT",
+          Value: String(payload.workflow_run.actor.id),
+        },
+        {
+          Name: "wf_run_wf_run_actor_login",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.actor.login,
+        },
+        {
+          Name: "wf_run_wf_run_check_suite_id",
+          Type: "BIGINT",
+          Value: String(payload.workflow_run.check_suite_id),
+        },
+        {
+          Name: "wf_run_wf_run_check_suite_node_id",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.check_suite_node_id,
+        },
+      );
+      if (payload.workflow_run.conclusion) {
+        measureValues.push({
+          Name: "wf_run_wf_run_conclusion",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.conclusion,
+        });
+      }
+      measureValues.push(
+        {
+          Name: "wf_run_wf_run_created_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.workflow_run.created_at),
+        },
+        {
+          Name: "wf_run_wf_run_event",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.event,
+        },
+      );
+      if (payload.workflow_run.head_branch) {
+        measureValues.push({
+          Name: "wf_run_wf_run_head_branch",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.head_branch,
+        });
+      }
+      measureValues.push({
+        Name: "wf_run_wf_run_id",
+        Type: "BIGINT",
+        Value: String(payload.workflow_run.id),
+      });
+      if (payload.workflow_run.name) {
+        measureValues.push({
+          Name: "wf_run_wf_run_name",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.name,
+        });
+      }
+      measureValues.push(
+        {
+          Name: "wf_run_wf_run_node_id",
+          Type: "VARCHAR",
+          Value: payload.workflow_run.node_id,
+        },
+        {
+          Name: "wf_run_wf_run_path",
+          Type: "VARCHAR",
+          Value: String(payload.workflow_run.path),
+        },
+        {
+          Name: "wf_run_wf_run_attempt",
+          Type: "BIGINT",
+          Value: String(payload.workflow_run.run_attempt),
+        },
+        {
+          Name: "wf_run_wf_run_number",
+          Type: "BIGINT",
+          Value: String(payload.workflow_run.run_number),
+        },
+        {
+          Name: "wf_run_wf_run_started_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.workflow_run.run_started_at),
+        },
+      );
+      if (payload.workflow_run.triggering_actor) {
+        measureValues.push(
+          {
+            Name: "wf_run_wf_run_triggering_actor_id",
+            Type: "BIGINT",
+            Value: String(payload.workflow_run.triggering_actor.id),
+          },
+          {
+            Name: "wf_run_wf_run_triggering_actor_login",
+            Type: "VARCHAR",
+            Value: payload.workflow_run.triggering_actor.login,
+          },
+        );
+      }
+      measureValues.push(
+        {
+          Name: "wf_run_wf_run_updated_at",
+          Type: "TIMESTAMP",
+          Value: formatTimestamp(payload.workflow_run.updated_at),
+        },
+        {
+          Name: "wf_run_wf_run_wf_id",
+          Type: "BIGINT",
+          Value: String(payload.workflow_run.workflow_id),
+        },
+      );
+      return {
+        measureName: "issue",
+        measureValueType: "MULTI",
+        measureValues: measureValues,
+      };
+    }
   }
   return {
     measureName: "dummyMeasure",
