@@ -8,10 +8,19 @@ import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 
 import { Api } from "../lib/api";
+import { EnvName } from "../lib/envName";
 import { Storage } from "../lib/storage";
 
+export interface GitHubActivityMetricsStackProps extends StackProps {
+  envName: EnvName;
+}
+
 export class GitHubActivityMetricsStack extends Stack {
-  constructor(scope: Construct, id: string, props: StackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: GitHubActivityMetricsStackProps,
+  ) {
     super(scope, id, props);
 
     const timestreamDatabaseName = "github_webhook_data";
@@ -83,6 +92,7 @@ export class GitHubActivityMetricsStack extends Stack {
     // API Gateway
     const api = new Api(this, "ApiGateway", {
       webhookHandler,
+      envName: props.envName,
     });
 
     // Output values

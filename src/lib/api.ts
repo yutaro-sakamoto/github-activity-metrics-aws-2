@@ -1,16 +1,21 @@
+import { RemovalPolicy } from "aws-cdk-lib";
 import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigatewayv2_integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
-import { RemovalPolicy } from "aws-cdk-lib";
+import { EnvName } from "./envName";
 
 export interface ApiProps {
   /**
    * Lambda function for processing GitHub webhooks
    */
   webhookHandler: lambda.NodejsFunction;
+  /**
+   * Environment name (e.g., dev, prod)
+   */
+  envName: EnvName;
 }
 
 export class Api extends Construct {
@@ -29,13 +34,17 @@ export class Api extends Construct {
 
     const { webhookHandler } = props;
 
+    const removalPolicy =
+      props.envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+    const autoDeleteObjects = props.envName === "dev";
+
     // Create access log bucket and log group for API Gateway
     const apiGatewayAccessLogsBucket = new s3.Bucket(
       this,
       "ApiGatewayAccessLogsBucket",
       {
-        removalPolicy: RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
+        removalPolicy,
+        autoDeleteObjects,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,

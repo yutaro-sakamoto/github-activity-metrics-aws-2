@@ -1,37 +1,44 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
+import { EnvName } from "../src/lib/envName";
 import { GitHubActivityMetricsStack } from "../src/stacks/github-activity-metrics-stack";
-const app = new App();
-const stack = new GitHubActivityMetricsStack(app, "test", {
-  env: {
-    account: "123456789012",
-    region: "ap-northeast-1",
-  },
-});
 
-const template = Template.fromStack(stack);
+const envNames: EnvName[] = ["prod", "dev"];
 
-test("Snapshot", () => {
-  expect(template.toJSON()).toMatchSnapshot();
-});
+envNames.forEach((envName) => {
+  const app = new App();
+  const stack = new GitHubActivityMetricsStack(app, "test", {
+    env: {
+      account: "123456789012",
+      region: "ap-northeast-1",
+    },
+    envName,
+  });
 
-describe("S3 Bucket Public Access Tests", () => {
-  test("All S3 buckets should have block public access enabled", () => {
-    const bucketResources = template.findResources("AWS::S3::Bucket");
-    if (Object.keys(bucketResources).length > 0) {
-      Object.entries(bucketResources).forEach(([_logicalId, resource]) => {
-        const bucketProps = resource.Properties;
+  const template = Template.fromStack(stack);
 
-        expect(bucketProps.PublicAccessBlockConfiguration).toBeDefined();
+  test("Snapshot", () => {
+    expect(template.toJSON()).toMatchSnapshot();
+  });
 
-        const publicAccessBlock = bucketProps.PublicAccessBlockConfiguration;
-        expect(publicAccessBlock.BlockPublicAcls).toBe(true);
-        expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
-        expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
-        expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
-      });
+  describe("S3 Bucket Public Access Tests", () => {
+    test("All S3 buckets should have block public access enabled", () => {
+      const bucketResources = template.findResources("AWS::S3::Bucket");
+      if (Object.keys(bucketResources).length > 0) {
+        Object.entries(bucketResources).forEach(([_logicalId, resource]) => {
+          const bucketProps = resource.Properties;
 
-      expect(Object.keys(bucketResources).length).toBeGreaterThan(0);
-    }
+          expect(bucketProps.PublicAccessBlockConfiguration).toBeDefined();
+
+          const publicAccessBlock = bucketProps.PublicAccessBlockConfiguration;
+          expect(publicAccessBlock.BlockPublicAcls).toBe(true);
+          expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
+          expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
+          expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
+        });
+
+        expect(Object.keys(bucketResources).length).toBeGreaterThan(0);
+      }
+    });
   });
 });

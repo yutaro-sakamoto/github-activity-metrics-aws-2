@@ -1,8 +1,8 @@
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import {
   TimestreamWriteClient,
   WriteRecordsCommand,
 } from "@aws-sdk/client-timestream-write";
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { Webhooks } from "@octokit/webhooks";
 import ipRangeCheck from "ip-range-check";
 import { getMeasure } from "./measures";
