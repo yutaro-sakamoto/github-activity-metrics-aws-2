@@ -71,14 +71,6 @@
       "type": "build"
     },
     {
-      "name": "@aws-cdk/aws-glue-alpha",
-      "type": "runtime"
-    },
-    {
-      "name": "@aws-sdk/client-firehose",
-      "type": "runtime"
-    },
-    {
       "name": "@aws-sdk/client-ssm",
       "type": "runtime"
     },
