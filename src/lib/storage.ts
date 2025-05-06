@@ -1,3 +1,6 @@
+import { Duration, RemovalPolicy } from "aws-cdk-lib";
+import * as backup from "aws-cdk-lib/aws-backup";
+import { Schedule } from "aws-cdk-lib/aws-events";
 import * as timestream from "aws-cdk-lib/aws-timestream";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
@@ -24,6 +27,11 @@ export class Storage extends Construct {
    */
   public readonly timestreamTable: timestream.CfnTable;
 
+  /**
+   * AWS Backup Vault for storing backups
+   */
+  public readonly backupVault: backup.BackupVault;
+
   constructor(scope: Construct, id: string, props: StorageProps) {
     super(scope, id);
 
@@ -48,6 +56,42 @@ export class Storage extends Construct {
 
     // Add dependency to ensure the database is created before the table
     this.timestreamTable.addDependency(this.timestreamDatabase);
+
+    // Create AWS Backup Vault to store backups
+    this.backupVault = new backup.BackupVault(
+      this,
+      "GitHubWebhookBackupVault",
+      {
+        backupVaultName: "github-webhook-backup-vault",
+        removalPolicy: RemovalPolicy.RETAIN, // Retain the vault even if the stack is deleted
+      },
+    );
+
+    // Create AWS Backup Plan
+    const backupPlan = new backup.BackupPlan(this, "GitHubWebhookBackupPlan", {
+      backupPlanName: "github-webhook-daily-backup",
+      backupVault: this.backupVault,
+    });
+
+    // Add backup rule - daily backup at 3:00 AM JST (18:00 UTC), 2 weeks retention
+    backupPlan.addRule(
+      new backup.BackupPlanRule({
+        ruleName: "DailyBackup-3AM-JST",
+        scheduleExpression: Schedule.cron({
+          minute: "0",
+          hour: "18", // 18:00 UTC = 3:00 AM JST
+          month: "*",
+          weekDay: "*",
+          year: "*",
+        }),
+        deleteAfter: Duration.days(14), // 2 weeks retention
+      }),
+    );
+
+    // Select the Timestream database as the resource to back up
+    backupPlan.addSelection("TimestreamSelection", {
+      resources: [backup.BackupResource.fromArn(this.timestreamTable.attrArn)],
+    });
 
     // CDK Nag suppressions
     NagSuppressions.addResourceSuppressions(

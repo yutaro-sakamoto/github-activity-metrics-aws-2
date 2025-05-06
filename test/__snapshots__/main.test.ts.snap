@@ -263,6 +263,92 @@ exports[`Snapshot 1`] = `
       },
       "Type": "AWS::ApiGatewayV2::Stage",
     },
+    "StorageGitHubWebhookBackupPlanFF4D1592": {
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": "github-webhook-daily-backup",
+          "BackupPlanRule": [
+            {
+              "Lifecycle": {
+                "DeleteAfterDays": 14,
+                "MoveToColdStorageAfterDays": 7,
+              },
+              "RuleName": "DailyBackup-3AM-JST",
+              "ScheduleExpression": "cron(0 18 ? * * *)",
+              "TargetBackupVault": {
+                "Fn::GetAtt": [
+                  "StorageGitHubWebhookBackupVault68AB98EA",
+                  "BackupVaultName",
+                ],
+              },
+            },
+          ],
+        },
+      },
+      "Type": "AWS::Backup::BackupPlan",
+    },
+    "StorageGitHubWebhookBackupPlanTimestreamSelection9590ABEA": {
+      "Properties": {
+        "BackupPlanId": {
+          "Fn::GetAtt": [
+            "StorageGitHubWebhookBackupPlanFF4D1592",
+            "BackupPlanId",
+          ],
+        },
+        "BackupSelection": {
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE",
+              "Arn",
+            ],
+          },
+          "Resources": [
+            "arn:aws:timestream:ap-northeast-1:123456789012:database/github_webhook_data",
+          ],
+          "SelectionName": "TimestreamSelection",
+        },
+      },
+      "Type": "AWS::Backup::BackupSelection",
+    },
+    "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageGitHubWebhookBackupVault68AB98EA": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BackupVaultName": "github-webhook-backup-vault",
+      },
+      "Type": "AWS::Backup::BackupVault",
+      "UpdateReplacePolicy": "Retain",
+    },
     "StorageGitHubWebhookDatabase916D4ADC": {
       "Metadata": {
         "cdk_nag": {
@@ -319,7 +405,7 @@ exports[`Snapshot 1`] = `
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
-          "S3Key": "3bb87a8b7d262d37d2b9d2002b5933670a5673ee236862ba50670d1c5dd63d10.zip",
+          "S3Key": "9a7d14cc479c54bae0848f871ee893696311979bf3dcc1aaf06d539a5ff7fa9e.zip",
         },
         "Environment": {
           "Variables": {
@@ -832,6 +918,92 @@ exports[`Snapshot 2`] = `
       },
       "Type": "AWS::IAM::Role",
     },
+    "StorageGitHubWebhookBackupPlanFF4D1592": {
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": "github-webhook-daily-backup",
+          "BackupPlanRule": [
+            {
+              "Lifecycle": {
+                "DeleteAfterDays": 14,
+                "MoveToColdStorageAfterDays": 7,
+              },
+              "RuleName": "DailyBackup-3AM-JST",
+              "ScheduleExpression": "cron(0 18 ? * * *)",
+              "TargetBackupVault": {
+                "Fn::GetAtt": [
+                  "StorageGitHubWebhookBackupVault68AB98EA",
+                  "BackupVaultName",
+                ],
+              },
+            },
+          ],
+        },
+      },
+      "Type": "AWS::Backup::BackupPlan",
+    },
+    "StorageGitHubWebhookBackupPlanTimestreamSelection9590ABEA": {
+      "Properties": {
+        "BackupPlanId": {
+          "Fn::GetAtt": [
+            "StorageGitHubWebhookBackupPlanFF4D1592",
+            "BackupPlanId",
+          ],
+        },
+        "BackupSelection": {
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE",
+              "Arn",
+            ],
+          },
+          "Resources": [
+            "arn:aws:timestream:ap-northeast-1:123456789012:database/github_webhook_data",
+          ],
+          "SelectionName": "TimestreamSelection",
+        },
+      },
+      "Type": "AWS::Backup::BackupSelection",
+    },
+    "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageGitHubWebhookBackupVault68AB98EA": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BackupVaultName": "github-webhook-backup-vault",
+      },
+      "Type": "AWS::Backup::BackupVault",
+      "UpdateReplacePolicy": "Retain",
+    },
     "StorageGitHubWebhookDatabase916D4ADC": {
       "Metadata": {
         "cdk_nag": {
@@ -888,7 +1060,7 @@ exports[`Snapshot 2`] = `
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
-          "S3Key": "3bb87a8b7d262d37d2b9d2002b5933670a5673ee236862ba50670d1c5dd63d10.zip",
+          "S3Key": "9a7d14cc479c54bae0848f871ee893696311979bf3dcc1aaf06d539a5ff7fa9e.zip",
         },
         "Environment": {
           "Variables": {
