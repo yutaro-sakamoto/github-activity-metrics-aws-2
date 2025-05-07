@@ -18,4 +18,10 @@ const project = new awscdk.AwsCdkTypeScriptApp({
 });
 
 project.gitignore.addPatterns('docs/');
+
+// remove default workflow files
+project.tryRemoveFile('.github/workflows/build.yml');
+project.tryRemoveFile('.github/workflows/pull-request-lint.yml');
+project.tryRemoveFile('.github/workflows/upgrade.yml');
+
 project.synth();
