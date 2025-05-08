@@ -11,9 +11,14 @@ export interface StorageProps {
    */
   databaseName: string;
   /**
-   * Timestream table name
+   * Timestream table name for webhook events
    */
   tableName: string;
+  /**
+   * Timestream table name for GitHub Actions custom data
+   * @default "github_actions_data"
+   */
+  actionsTableName: string;
 }
 
 export class Storage extends Construct {
@@ -23,9 +28,14 @@ export class Storage extends Construct {
   public readonly timestreamDatabase: timestream.CfnDatabase;
 
   /**
-   * Timestream table
+   * Timestream table for webhook events
    */
   public readonly timestreamTable: timestream.CfnTable;
+
+  /**
+   * Timestream table for GitHub Actions custom data
+   */
+  public readonly actionsTimestreamTable: timestream.CfnTable;
 
   /**
    * AWS Backup Vault for storing backups
@@ -54,8 +64,23 @@ export class Storage extends Construct {
       },
     });
 
-    // Add dependency to ensure the database is created before the table
+    // Timestream table for storing GitHub Actions custom data
+    this.actionsTimestreamTable = new timestream.CfnTable(
+      this,
+      "GitHubActionsTable",
+      {
+        databaseName: props.databaseName,
+        tableName: props.actionsTableName,
+        retentionProperties: {
+          memoryStoreRetentionPeriodInHours: "24", // 1 day in memory store
+          magneticStoreRetentionPeriodInDays: "365", // 1 year in magnetic store
+        },
+      },
+    );
+
+    // Add dependency to ensure the database is created before the tables
     this.timestreamTable.addDependency(this.timestreamDatabase);
+    this.actionsTimestreamTable.addDependency(this.timestreamDatabase);
 
     // Create AWS Backup Vault to store backups
     this.backupVault = new backup.BackupVault(
@@ -88,14 +113,21 @@ export class Storage extends Construct {
       }),
     );
 
-    // Select the Timestream database as the resource to back up
+    // Select the Timestream tables as the resources to back up
     backupPlan.addSelection("TimestreamSelection", {
-      resources: [backup.BackupResource.fromArn(this.timestreamTable.attrArn)],
+      resources: [
+        backup.BackupResource.fromArn(this.timestreamTable.attrArn),
+        backup.BackupResource.fromArn(this.actionsTimestreamTable.attrArn),
+      ],
     });
 
     // CDK Nag suppressions
     NagSuppressions.addResourceSuppressions(
-      [this.timestreamDatabase, this.timestreamTable],
+      [
+        this.timestreamDatabase,
+        this.timestreamTable,
+        this.actionsTimestreamTable,
+      ],
       [
         {
           id: "AwsSolutions-IAM4",
