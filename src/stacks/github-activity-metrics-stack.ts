@@ -25,11 +25,13 @@ export class GitHubActivityMetricsStack extends Stack {
 
     const timestreamDatabaseName = "github_webhook_data";
     const timestreamTableName = "github_events";
+    const githubActionsTimestreamTableName = "github_actions_data";
 
-    // Create storage resources (Timestream database and table)
+    // Create storage resources (Timestream database and tables)
     const storage = new Storage(this, "Storage", {
       databaseName: timestreamDatabaseName,
       tableName: timestreamTableName,
+      actionsTableName: githubActionsTimestreamTableName,
     });
 
     // Reference GitHub Webhook secret from SSM Parameter Store
@@ -115,6 +117,12 @@ export class GitHubActivityMetricsStack extends Stack {
     new CfnOutput(this, "TimestreamTableName", {
       value: storage.timestreamTable.ref,
       description: "Timestream table where GitHub webhook data is stored",
+    });
+
+    new CfnOutput(this, "ActionsTimestreamTableName", {
+      value: storage.actionsTimestreamTable.ref,
+      description:
+        "Timestream table where GitHub Actions custom data is stored",
     });
 
     // Configure CDK Nag suppressions
