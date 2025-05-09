@@ -73,29 +73,10 @@ export class GitHubActivityMetricsStack extends Stack {
     webhookSecretParam.grantRead(webhookHandler);
 
     // Grant Timestream write permissions to the Lambda function
-    webhookHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:WriteRecords", "timestream:DescribeTable"],
-        resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabaseName}/table/${timestreamTableName}`,
-        ],
-      }),
-    );
-
-    webhookHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:DescribeDatabase"],
-        resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabaseName}`,
-        ],
-      }),
-    );
-
-    webhookHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:DescribeEndpoints"],
-        resources: ["*"],
-      }),
+    this.addTimestreamWritePermissionsToLambda(
+      webhookHandler,
+      timestreamDatabaseName,
+      timestreamTableName,
     );
 
     // API Gateway
@@ -117,6 +98,13 @@ export class GitHubActivityMetricsStack extends Stack {
         externalModules: ["aws-sdk"],
       },
     });
+
+    // Grant Timestream write permissions to the Mock API handler
+    this.addTimestreamWritePermissionsToLambda(
+      mockApiHandler,
+      timestreamDatabaseName,
+      githubActionsTimestreamTableName,
+    );
 
     // Create Mock API with API Key authentication
     const mockApi = new MockApi(this, "MockApiGateway", {
@@ -155,6 +143,44 @@ export class GitHubActivityMetricsStack extends Stack {
 
     // Configure CDK Nag suppressions
     this.setupNagSuppressions();
+  }
+
+  /**
+   * Add Timestream write permissions to the Lambda function
+   * @param lambdaFunction the Lambda function to which permissions will be added
+   * @param databaseName Timestream database name
+   * @param tableName Timestream table name
+   */
+  private addTimestreamWritePermissionsToLambda(
+    lambdaFunction: NodejsFunction,
+    databaseName: string,
+    tableName: string,
+  ) {
+    // Grant Timestream write permissions to the Lambda function
+    lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["timestream:WriteRecords", "timestream:DescribeTable"],
+        resources: [
+          `arn:aws:timestream:${this.region}:${this.account}:database/${databaseName}/table/${tableName}`,
+        ],
+      }),
+    );
+
+    lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["timestream:DescribeDatabase"],
+        resources: [
+          `arn:aws:timestream:${this.region}:${this.account}:database/${databaseName}`,
+        ],
+      }),
+    );
+
+    lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["timestream:DescribeEndpoints"],
+        resources: ["*"],
+      }),
+    );
   }
 
   /**
