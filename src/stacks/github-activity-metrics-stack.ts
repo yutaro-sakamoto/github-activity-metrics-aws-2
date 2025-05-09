@@ -10,6 +10,7 @@ import { Construct } from "constructs";
 import { Api } from "../lib/api";
 import { EnvName } from "../lib/envName";
 import { Storage } from "../lib/storage";
+import { MockApi } from "../lib/mock-api";
 
 export interface GitHubActivityMetricsStackProps extends StackProps {
   envName: EnvName;
@@ -103,6 +104,27 @@ export class GitHubActivityMetricsStack extends Stack {
       envName: props.envName,
     });
 
+    // Create Mock API handler Lambda function
+    const mockApiHandler = new NodejsFunction(this, "MockApiHandler", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: "handler",
+      entry: path.join(__dirname, "../lambdas/mock-api-handler/index.ts"),
+      timeout: Duration.seconds(10),
+      memorySize: 128,
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        externalModules: ["aws-sdk"],
+      },
+    });
+
+    // Create Mock API with API Key authentication
+    const mockApi = new MockApi(this, "MockApiGateway", {
+      handler: mockApiHandler,
+      apiKeyName: `mock-api-key-${props.envName}`,
+      usagePlanName: `mock-api-usage-plan-${props.envName}`,
+    });
+
     // Output values
     new CfnOutput(this, "WebhookApiUrl", {
       value: api.webhookUrl,
@@ -123,6 +145,12 @@ export class GitHubActivityMetricsStack extends Stack {
       value: storage.actionsTimestreamTable.ref,
       description:
         "Timestream table where GitHub Actions custom data is stored",
+    });
+
+    // Output Mock API URL
+    new CfnOutput(this, "MockApiEndpoint", {
+      value: mockApi.apiUrl,
+      description: "Mock API endpoint that always returns successful response",
     });
 
     // Configure CDK Nag suppressions
