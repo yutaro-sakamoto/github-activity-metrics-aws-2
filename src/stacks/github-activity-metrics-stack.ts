@@ -24,15 +24,15 @@ export class GitHubActivityMetricsStack extends Stack {
   ) {
     super(scope, id, props);
 
-    const timestreamDatabaseName = "github_webhook_data";
-    const timestreamTableName = "github_events";
-    const githubActionsTimestreamTableName = "github_actions_data";
+    const timestreamDatabaseName = "metrics";
+    const githubWebHookTimestreamTableName = "github_webhook";
+    const customDataTimestreamTableName = "custom_data";
 
     // Create storage resources (Timestream database and tables)
     const storage = new Storage(this, "Storage", {
       databaseName: timestreamDatabaseName,
-      tableName: timestreamTableName,
-      actionsTableName: githubActionsTimestreamTableName,
+      githubWebHookTableName: githubWebHookTimestreamTableName,
+      customDataTableName: customDataTimestreamTableName,
     });
 
     // Reference GitHub Webhook secret from SSM Parameter Store
@@ -53,7 +53,7 @@ export class GitHubActivityMetricsStack extends Stack {
       entry: path.join(__dirname, "../lambdas/webhook-handler/index.ts"),
       environment: {
         TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-        TIMESTREAM_TABLE_NAME: timestreamTableName,
+        TIMESTREAM_TABLE_NAME: githubWebHookTimestreamTableName,
       },
       timeout: Duration.seconds(30),
       memorySize: 256,
@@ -76,7 +76,7 @@ export class GitHubActivityMetricsStack extends Stack {
     this.addTimestreamWritePermissionsToLambda(
       webhookHandler,
       timestreamDatabaseName,
-      timestreamTableName,
+      githubWebHookTimestreamTableName,
     );
 
     // API Gateway
@@ -94,7 +94,7 @@ export class GitHubActivityMetricsStack extends Stack {
         handler: "handler",
         environment: {
           TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-          TIMESTREAM_TABLE_NAME: githubActionsTimestreamTableName,
+          TIMESTREAM_TABLE_NAME: customDataTimestreamTableName,
         },
         entry: path.join(
           __dirname,
@@ -114,7 +114,7 @@ export class GitHubActivityMetricsStack extends Stack {
     this.addTimestreamWritePermissionsToLambda(
       customDataApiHandler,
       timestreamDatabaseName,
-      githubActionsTimestreamTableName,
+      customDataTimestreamTableName,
     );
 
     // Create Custom Data API with API Key authentication
@@ -136,12 +136,12 @@ export class GitHubActivityMetricsStack extends Stack {
     });
 
     new CfnOutput(this, "TimestreamTableName", {
-      value: storage.timestreamTable.ref,
+      value: storage.githubWebHookTimestreamTable.ref,
       description: "Timestream table where GitHub webhook data is stored",
     });
 
     new CfnOutput(this, "ActionsTimestreamTableName", {
-      value: storage.actionsTimestreamTable.ref,
+      value: storage.customDataTimestreamTable.ref,
       description:
         "Timestream table where GitHub Actions custom data is stored",
     });
