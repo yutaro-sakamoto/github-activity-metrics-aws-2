@@ -88,6 +88,10 @@
       "type": "runtime"
     },
     {
+      "name": "aws-lambda",
+      "type": "runtime"
+    },
+    {
       "name": "cdk-nag",
       "type": "runtime"
     },
