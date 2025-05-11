@@ -90,7 +90,7 @@ export class Api extends Construct {
       integration: webhookIntegration,
     });
 
-    const stageName = "v2";
+    const stageName = "prod";
 
     // Create explicit stage
     const stage = new apigatewayv2.CfnStage(this, "V2Stage", {
