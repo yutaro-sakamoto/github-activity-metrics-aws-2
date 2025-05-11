@@ -19,9 +19,6 @@ function isValidJson(jsonData: any): boolean {
   return "MeasureValue" in jsonData || "MeasureValues" in jsonData;
 }
 
-/**
- * Lambda handler that always returns a successful response with fixed data
- */
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {

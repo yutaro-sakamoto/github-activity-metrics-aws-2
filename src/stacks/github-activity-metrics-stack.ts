@@ -10,7 +10,7 @@ import { Construct } from "constructs";
 import { Api } from "../lib/api";
 import { EnvName } from "../lib/envName";
 import { Storage } from "../lib/storage";
-import { MockApi } from "../lib/mock-api";
+import { CustomDataApi } from "../lib/custom-data-api";
 
 export interface GitHubActivityMetricsStackProps extends StackProps {
   envName: EnvName;
@@ -85,36 +85,43 @@ export class GitHubActivityMetricsStack extends Stack {
       envName: props.envName,
     });
 
-    // Create Mock API handler Lambda function
-    const mockApiHandler = new NodejsFunction(this, "MockApiHandler", {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "handler",
-      environment: {
-        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-        TIMESTREAM_TABLE_NAME: githubActionsTimestreamTableName,
+    // Create Custom Data API handler Lambda function
+    const customDataApiHandler = new NodejsFunction(
+      this,
+      "CustomDataApiHandler",
+      {
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: "handler",
+        environment: {
+          TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
+          TIMESTREAM_TABLE_NAME: githubActionsTimestreamTableName,
+        },
+        entry: path.join(
+          __dirname,
+          "../lambdas/custom-data-api-handler/index.ts",
+        ),
+        timeout: Duration.seconds(10),
+        memorySize: 128,
+        bundling: {
+          minify: true,
+          sourceMap: true,
+          externalModules: ["aws-sdk"],
+        },
       },
-      entry: path.join(__dirname, "../lambdas/mock-api-handler/index.ts"),
-      timeout: Duration.seconds(10),
-      memorySize: 128,
-      bundling: {
-        minify: true,
-        sourceMap: true,
-        externalModules: ["aws-sdk"],
-      },
-    });
+    );
 
-    // Grant Timestream write permissions to the Mock API handler
+    // Grant Timestream write permissions to the Custom Data API handler
     this.addTimestreamWritePermissionsToLambda(
-      mockApiHandler,
+      customDataApiHandler,
       timestreamDatabaseName,
       githubActionsTimestreamTableName,
     );
 
-    // Create Mock API with API Key authentication
-    const mockApi = new MockApi(this, "MockApiGateway", {
-      handler: mockApiHandler,
-      apiKeyName: `mock-api-key-${props.envName}`,
-      usagePlanName: `mock-api-usage-plan-${props.envName}`,
+    // Create Custom Data API with API Key authentication
+    const customDataApi = new CustomDataApi(this, "CustomDataApiGateway", {
+      handler: customDataApiHandler,
+      apiKeyName: `custom-data-api-key-${props.envName}`,
+      usagePlanName: `custom-data-api-usage-plan-${props.envName}`,
     });
 
     // Output values
@@ -139,10 +146,10 @@ export class GitHubActivityMetricsStack extends Stack {
         "Timestream table where GitHub Actions custom data is stored",
     });
 
-    // Output Mock API URL
-    new CfnOutput(this, "MockApiEndpoint", {
-      value: mockApi.apiUrl,
-      description: "Mock API endpoint that always returns successful response",
+    // Output Custom Data API URL
+    new CfnOutput(this, "CustomDataApiEndpoint", {
+      value: customDataApi.apiUrl,
+      description: "Custom Data API endpoint",
     });
 
     // Configure CDK Nag suppressions

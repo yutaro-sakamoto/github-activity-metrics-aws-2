@@ -4,7 +4,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { CfnOutput } from "aws-cdk-lib";
 import * as aws_logs from "aws-cdk-lib/aws-logs";
 
-export interface MockApiProps {
+export interface CustomDataApiProps {
   /**
    * Lambda handler to process requests
    */
@@ -21,7 +21,7 @@ export interface MockApiProps {
   usagePlanName: string;
 }
 
-export class MockApi extends Construct {
+export class CustomDataApi extends Construct {
   /**
    * API Gateway REST API
    */
@@ -42,20 +42,20 @@ export class MockApi extends Construct {
    */
   public readonly apiUrl: string;
 
-  constructor(scope: Construct, id: string, props: MockApiProps) {
+  constructor(scope: Construct, id: string, props: CustomDataApiProps) {
     super(scope, id);
 
     // Create REST API
     this.api = new apigateway.RestApi(this, "RestApi", {
-      restApiName: "Mock API",
-      description: "Mock API that always returns successful response",
+      restApiName: "Custom Data API",
+      description: "Write custom data sent by users to Timestream",
       deployOptions: {
         stageName: "prod",
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         accessLogDestination: new apigateway.LogGroupLogDestination(
-          new aws_logs.LogGroup(this, "MockApiAccessLogs", {
+          new aws_logs.LogGroup(this, "CustomDataApiAccessLogs", {
             retention: aws_logs.RetentionDays.ONE_MONTH,
           }),
         ),
@@ -106,14 +106,14 @@ export class MockApi extends Construct {
     // Output API URL
     this.apiUrl = this.api.url;
 
-    new CfnOutput(this, "MockApiUrl", {
+    new CfnOutput(this, "CustomDataApiUrl", {
       value: this.api.url,
-      description: "URL for the Mock API",
+      description: "URL for the CustomData API",
     });
 
-    new CfnOutput(this, "MockApiKeyId", {
+    new CfnOutput(this, "CustomDataApiKeyId", {
       value: this.apiKey.keyId,
-      description: "Mock API Key ID",
+      description: "CustomData API Key ID",
     });
   }
 }
