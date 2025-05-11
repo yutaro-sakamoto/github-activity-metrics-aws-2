@@ -99,15 +99,7 @@ export class MockApi extends Construct {
     const data = this.api.root.addResource("data");
 
     // Add GET method
-    data.addMethod("GET", new apigateway.LambdaIntegration(props.handler), {
-      apiKeyRequired: true, // API Key required for this method
-    });
-
-    // Create a /status resource
-    const status = this.api.root.addResource("status");
-
-    // Add GET method
-    status.addMethod("GET", new apigateway.LambdaIntegration(props.handler), {
+    data.addMethod("POST", new apigateway.LambdaIntegration(props.handler), {
       apiKeyRequired: true, // API Key required for this method
     });
 

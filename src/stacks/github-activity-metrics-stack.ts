@@ -89,6 +89,10 @@ export class GitHubActivityMetricsStack extends Stack {
     const mockApiHandler = new NodejsFunction(this, "MockApiHandler", {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: "handler",
+      environment: {
+        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
+        TIMESTREAM_TABLE_NAME: githubActionsTimestreamTableName,
+      },
       entry: path.join(__dirname, "../lambdas/mock-api-handler/index.ts"),
       timeout: Duration.seconds(10),
       memorySize: 128,
