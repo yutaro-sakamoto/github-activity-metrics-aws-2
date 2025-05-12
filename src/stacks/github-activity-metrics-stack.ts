@@ -4,9 +4,9 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
+import * as sns from "aws-cdk-lib/aws-sns";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
-
 import { Api } from "../lib/api";
 import { EnvName } from "../lib/envName";
 import { Storage } from "../lib/storage";
@@ -54,6 +54,7 @@ export class GitHubActivityMetricsStack extends Stack {
       environment: {
         TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
         TIMESTREAM_TABLE_NAME: githubWebHookTimestreamTableName,
+        SNS_TOPIC_ARN: `arn:aws:sns:${this.region}:${this.account}:github-activity-notifications-${props.envName}`,
       },
       timeout: Duration.seconds(30),
       memorySize: 256,
@@ -150,6 +151,19 @@ export class GitHubActivityMetricsStack extends Stack {
     new CfnOutput(this, "CustomDataApiEndpoint", {
       value: customDataApi.apiUrl,
       description: "Custom Data API endpoint",
+    });
+
+    // Create an SNS topic for GitHub activity notifications
+    const githubActivityTopic = new sns.Topic(this, "GitHubActivityTopic", {
+      displayName: `call-github-api`,
+      topicName: `call-github-api`,
+      enforceSSL: true,
+    });
+
+    // Output the SNS topic ARN
+    new CfnOutput(this, "GitHubActivityTopicArn", {
+      value: githubActivityTopic.topicArn,
+      description: "SNS Topic ARN for GitHub activity notifications",
     });
 
     // Configure CDK Nag suppressions
