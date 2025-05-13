@@ -565,14 +565,6 @@ function add_pull_request_object_infomation(
     });
   }
 
-  if (payload.pull_request.merged_at) {
-    measureValues.push({
-      Name: `${prefix}pr_merged_at`,
-      Type: "TIMESTAMP",
-      Value: formatTimestamp(payload.pull_request.merged_at),
-    });
-  }
-
   if (payload.pull_request.user) {
     measureValues.push({
       Name: `${prefix}pr_user_id`,
