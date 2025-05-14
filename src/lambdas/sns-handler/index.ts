@@ -4,8 +4,8 @@
  */
 
 export const handler = async (event: any, context: any) => {
-  console.log("SNSイベントを受信しました");
-  console.log("イベント:", JSON.stringify(event, null, 2));
+  console.log("event:", JSON.stringify(event));
+  console.log("context:", JSON.stringify(context));
 
   // SNSメッセージの処理
   try {
@@ -14,7 +14,7 @@ export const handler = async (event: any, context: any) => {
     for (const record of records) {
       if (record.Sns) {
         const message = record.Sns.Message;
-        console.log("SNSメッセージ:", message);
+        console.log("SNS message:", message);
 
         // ここで必要な処理を追加できます
         // このシンプルな例では、メッセージを出力するだけです
@@ -23,14 +23,14 @@ export const handler = async (event: any, context: any) => {
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: "SNSメッセージを正常に処理しました" }),
+      body: JSON.stringify({ message: "success" }),
     };
   } catch (error) {
-    console.error("エラーが発生しました:", error);
+    console.error("Unknown error:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: "SNSメッセージの処理中にエラーが発生しました",
+        message: "Unknown error",
       }),
     };
   }

@@ -47,6 +47,13 @@ export class GitHubActivityMetricsStack extends Stack {
         },
       );
 
+    // Create an SNS topic for GitHub activity notifications
+    const githubActivityTopic = new sns.Topic(this, "GitHubActivityTopic", {
+      displayName: `call-github-api`,
+      topicName: `call-github-api`,
+      enforceSSL: true,
+    });
+
     // Lambda function - Validates GitHub webhooks and sends data to Timestream
     const webhookHandler = new NodejsFunction(this, "WebhookHandler", {
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -55,7 +62,7 @@ export class GitHubActivityMetricsStack extends Stack {
       environment: {
         TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
         TIMESTREAM_TABLE_NAME: githubWebHookTimestreamTableName,
-        SNS_TOPIC_ARN: `arn:aws:sns:${this.region}:${this.account}:github-activity-notifications-${props.envName}`,
+        SNS_TOPIC_ARN: githubActivityTopic.topicArn,
       },
       timeout: Duration.seconds(30),
       memorySize: 256,
@@ -74,6 +81,9 @@ export class GitHubActivityMetricsStack extends Stack {
 
     // Grant SSM parameter read permission to the Lambda function
     webhookSecretParam.grantRead(webhookHandler);
+
+    // Grant webhook lambda permission to publish to SNS topic
+    githubActivityTopic.grantPublish(webhookHandler);
 
     // Grant Timestream write permissions to the Lambda function
     this.addTimestreamWritePermissionsToLambda(
@@ -155,13 +165,6 @@ export class GitHubActivityMetricsStack extends Stack {
       description: "Custom Data API endpoint",
     });
 
-    // Create an SNS topic for GitHub activity notifications
-    const githubActivityTopic = new sns.Topic(this, "GitHubActivityTopic", {
-      displayName: `call-github-api`,
-      topicName: `call-github-api`,
-      enforceSSL: true,
-    });
-
     // Create a Lambda function that will be triggered by SNS
     const snsHandler = new NodejsFunction(this, "SnsHandler", {
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -179,9 +182,6 @@ export class GitHubActivityMetricsStack extends Stack {
     githubActivityTopic.addSubscription(
       new snsSubs.LambdaSubscription(snsHandler),
     );
-
-    // Grant webhook lambda permission to publish to SNS topic
-    githubActivityTopic.grantPublish(webhookHandler);
 
     // Output the SNS topic ARN
     new CfnOutput(this, "GitHubActivityTopicArn", {

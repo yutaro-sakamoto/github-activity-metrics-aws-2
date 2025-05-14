@@ -3,9 +3,11 @@ import {
   TimestreamWriteClient,
   WriteRecordsCommand,
 } from "@aws-sdk/client-timestream-write";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 import { Webhooks } from "@octokit/webhooks";
 import ipRangeCheck from "ip-range-check";
 import { getMeasure } from "./measures";
+import { sns } from "cdk-nag/lib/rules";
 
 // Define GitHub IP ranges
 const GITHUB_IP_RANGES = [
@@ -126,6 +128,34 @@ async function sendToTimestream(
   }
 }
 
+function publishPullRequestEventToSnsTopic(deriveryId: string, data: any) {
+  if (
+    "number" in data &&
+    "action" in data &&
+    "organization" in data &&
+    "login" in data.organization &&
+    "repository" in data &&
+    "name" in data.repository
+  ) {
+    const snsClient = new SNSClient({ region: process.env.AWS_REGION });
+    const snsTopicArn = process.env.SNS_TOPIC_ARN;
+    const snsMessage = {
+      deliveryId: deriveryId,
+      eventType: "pull_request",
+      action: data.action,
+      number: data.number,
+      organization: data.organization.login,
+      repository: data.repository.name,
+    };
+    snsClient.send(
+      new PublishCommand({
+        Message: JSON.stringify(snsMessage),
+        TopicArn: snsTopicArn,
+      }),
+    );
+  }
+}
+
 // Main Lambda function handler
 export const handler = async (event: any) => {
   console.log("Received webhook event");
@@ -223,6 +253,11 @@ export const handler = async (event: any) => {
           error: (error as Error).message,
         }),
       };
+    }
+
+    // Publish pull request event to SNS topic
+    if (githubEvent === "pull_request") {
+      publishPullRequestEventToSnsTopic(githubDelivery, parsedBody);
     }
 
     // Log metadata separately
