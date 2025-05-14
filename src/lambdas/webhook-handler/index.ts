@@ -128,7 +128,10 @@ async function sendToTimestream(
   }
 }
 
-function publishPullRequestEventToSnsTopic(deriveryId: string, data: any) {
+async function publishPullRequestEventToSnsTopic(
+  deriveryId: string,
+  data: any,
+) {
   if (
     "number" in data &&
     "action" in data &&
@@ -147,7 +150,7 @@ function publishPullRequestEventToSnsTopic(deriveryId: string, data: any) {
       organization: data.organization.login,
       repository: data.repository.name,
     };
-    snsClient.send(
+    await snsClient.send(
       new PublishCommand({
         Message: JSON.stringify(snsMessage),
         TopicArn: snsTopicArn,
@@ -257,7 +260,7 @@ export const handler = async (event: any) => {
 
     // Publish pull request event to SNS topic
     if (githubEvent === "pull_request") {
-      publishPullRequestEventToSnsTopic(githubDelivery, parsedBody);
+      await publishPullRequestEventToSnsTopic(githubDelivery, parsedBody);
     }
 
     // Log metadata separately
