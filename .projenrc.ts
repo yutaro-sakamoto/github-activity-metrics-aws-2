@@ -10,6 +10,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     '@aws-sdk/client-ssm',
     '@octokit/webhooks',
     '@aws-sdk/client-timestream-write',
+    '@aws-sdk/client-sns',
     'ip-range-check',
     'aws-lambda',
   ],

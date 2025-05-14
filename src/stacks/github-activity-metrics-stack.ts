@@ -5,6 +5,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubs from "aws-cdk-lib/aws-sns-subscriptions";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 import { Api } from "../lib/api";
@@ -66,6 +67,7 @@ export class GitHubActivityMetricsStack extends Stack {
         nodeModules: [
           "@aws-sdk/client-ssm",
           "@aws-sdk/client-timestream-write",
+          "@aws-sdk/client-sns",
         ],
       },
     });
@@ -159,6 +161,27 @@ export class GitHubActivityMetricsStack extends Stack {
       topicName: `call-github-api`,
       enforceSSL: true,
     });
+
+    // Create a Lambda function that will be triggered by SNS
+    const snsHandler = new NodejsFunction(this, "SnsHandler", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: "handler",
+      entry: path.join(__dirname, "../lambdas/sns-handler/index.ts"),
+      timeout: Duration.seconds(30),
+      memorySize: 128,
+      description: "Processes messages from GitHub activity SNS topic",
+      environment: {
+        // 必要な環境変数があれば追加
+      },
+    });
+
+    // Subscribe the Lambda function to the SNS topic
+    githubActivityTopic.addSubscription(
+      new snsSubs.LambdaSubscription(snsHandler),
+    );
+
+    // Grant webhook lambda permission to publish to SNS topic
+    githubActivityTopic.grantPublish(webhookHandler);
 
     // Output the SNS topic ARN
     new CfnOutput(this, "GitHubActivityTopicArn", {
