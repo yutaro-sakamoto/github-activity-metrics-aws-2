@@ -28,12 +28,14 @@ export class GitHubActivityMetricsStack extends Stack {
     const timestreamDatabaseName = "metrics";
     const githubWebHookTimestreamTableName = "github_webhook";
     const customDataTimestreamTableName = "custom_data";
+    const githubAPIResultTimestreamTableName = "github_api_result";
 
     // Create storage resources (Timestream database and tables)
     const storage = new Storage(this, "Storage", {
       databaseName: timestreamDatabaseName,
       githubWebHookTableName: githubWebHookTimestreamTableName,
       customDataTableName: customDataTimestreamTableName,
+      githubAPIResultTableName: githubAPIResultTimestreamTableName,
     });
 
     // Reference GitHub Webhook secret from SSM Parameter Store

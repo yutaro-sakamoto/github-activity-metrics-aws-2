@@ -19,6 +19,11 @@ export interface StorageProps {
    * @default "github_actions_data"
    */
   customDataTableName: string;
+  /**
+   * Timestream table name for GitHub API result
+   * @default "github_api_result"
+   */
+  githubAPIResultTableName: string;
 }
 
 export class Storage extends Construct {
@@ -36,6 +41,11 @@ export class Storage extends Construct {
    * Timestream table for GitHub Actions custom data
    */
   public readonly customDataTimestreamTable: timestream.CfnTable;
+
+  /**
+   * Timestream table for GitHub API result
+   */
+  public readonly githubAPIResultTimestreamTable: timestream.CfnTable;
 
   /**
    * AWS Backup Vault for storing backups
@@ -82,9 +92,24 @@ export class Storage extends Construct {
       },
     );
 
+    // Timestream table for storing GitHub API result
+    this.githubAPIResultTimestreamTable = new timestream.CfnTable(
+      this,
+      "GitHubAPIResultTable",
+      {
+        databaseName: props.databaseName,
+        tableName: props.githubAPIResultTableName,
+        retentionProperties: {
+          memoryStoreRetentionPeriodInHours: "24", // 1 day in memory store
+          magneticStoreRetentionPeriodInDays: "365", // 1 year in magnetic store
+        },
+      },
+    );
+
     // Add dependency to ensure the database is created before the tables
     this.githubWebHookTimestreamTable.addDependency(this.timestreamDatabase);
     this.customDataTimestreamTable.addDependency(this.timestreamDatabase);
+    this.githubAPIResultTimestreamTable.addDependency(this.timestreamDatabase);
 
     // Create AWS Backup Vault to store backups
     this.backupVault = new backup.BackupVault(this, "MetricsBackupVault", {
@@ -120,6 +145,9 @@ export class Storage extends Construct {
           this.githubWebHookTimestreamTable.attrArn,
         ),
         backup.BackupResource.fromArn(this.customDataTimestreamTable.attrArn),
+        backup.BackupResource.fromArn(
+          this.githubAPIResultTimestreamTable.attrArn,
+        ),
       ],
     });
 
