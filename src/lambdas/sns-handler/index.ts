@@ -3,7 +3,6 @@ import {
   TimestreamWriteClient,
   WriteRecordsCommand,
 } from "@aws-sdk/client-timestream-write";
-//import { Octokit } from "@octokit/rest";
 const ssmClient = new SSMClient();
 const timestreamClient = new TimestreamWriteClient();
 
@@ -13,8 +12,6 @@ const timestreamClient = new TimestreamWriteClient();
  */
 
 export const handler = async (event: any, context: any) => {
-  console.log("event:", JSON.stringify(event));
-  console.log("context:", JSON.stringify(context));
   const { Octokit } = await import("@octokit/rest");
 
   // SNSメッセージの処理
@@ -25,7 +22,6 @@ export const handler = async (event: any, context: any) => {
       "/github/metrics/github-token",
     );
 
-    console.log("Length of secretToken:", secretToken.length);
     for (const record of records) {
       if (record.Sns) {
         const message = record.Sns.Message;
@@ -43,10 +39,6 @@ export const handler = async (event: any, context: any) => {
           pull_number: parsedMessage.number,
         });
 
-        console.log("changed_files:", pullRequest.changed_files);
-        console.log("additions:", pullRequest.additions);
-        console.log("deletions:", pullRequest.deletions);
-
         // プルリクエストの情報をTimestreamに書き込む
         await sendPullRequestDataToTimestream(
           parsedMessage.organization,
@@ -56,7 +48,7 @@ export const handler = async (event: any, context: any) => {
           pullRequest.additions,
           pullRequest.deletions,
           parsedMessage.action,
-          parsedMessage.delivery_id,
+          parsedMessage.deliveryId,
         );
 
         // ここで必要な処理を追加できます
@@ -119,30 +111,24 @@ async function sendPullRequestDataToTimestream(
     { Name: "pull_number", Value: pullNumber.toString() },
     { Name: "action", Value: action },
     { Name: "delivery_id", Value: deliveryId },
-    { Name: "event_type", Value: "pull_request_details" },
+    { Name: "event_type", Value: "pull_request" },
   ];
 
-  // Create records for each metric we want to store
+  // Create a single record with multiple measure values
   const records = [
     {
       Dimensions: dimensions,
-      MeasureName: "changed_files",
-      MeasureValue: changedFiles.toString(),
-      MeasureValueType: "BIGINT" as const,
-      Time: currentTime,
-    },
-    {
-      Dimensions: dimensions,
-      MeasureName: "additions",
-      MeasureValue: additions.toString(),
-      MeasureValueType: "BIGINT" as const,
-      Time: currentTime,
-    },
-    {
-      Dimensions: dimensions,
-      MeasureName: "deletions",
-      MeasureValue: deletions.toString(),
-      MeasureValueType: "BIGINT" as const,
+      MeasureName: "pr_stats",
+      MeasureValueType: "MULTI",
+      MeasureValues: [
+        {
+          Name: "pr_changed_files",
+          Value: changedFiles.toString(),
+          Type: "BIGINT",
+        },
+        { Name: "pr_additions", Value: additions.toString(), Type: "BIGINT" },
+        { Name: "pr_deletions", Value: deletions.toString(), Type: "BIGINT" },
+      ],
       Time: currentTime,
     },
   ];
