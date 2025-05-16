@@ -83,6 +83,10 @@
       "type": "runtime"
     },
     {
+      "name": "@octokit/rest",
+      "type": "runtime"
+    },
+    {
       "name": "@octokit/webhooks",
       "type": "runtime"
     },

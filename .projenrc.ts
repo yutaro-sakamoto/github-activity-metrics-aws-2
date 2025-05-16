@@ -9,6 +9,7 @@ const project = new awscdk.AwsCdkTypeScriptApp({
     'cdk-nag',
     '@aws-sdk/client-ssm',
     '@octokit/webhooks',
+    '@octokit/rest',
     '@aws-sdk/client-timestream-write',
     '@aws-sdk/client-sns',
     'ip-range-check',

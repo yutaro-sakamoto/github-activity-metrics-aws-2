@@ -176,7 +176,19 @@ export class GitHubActivityMetricsStack extends Stack {
       memorySize: 128,
       description: "Processes messages from GitHub activity SNS topic",
       environment: {
-        // 必要な環境変数があれば追加
+        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
+        TIMESTREAM_TABLE_NAME: githubAPIResultTimestreamTableName,
+      },
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        externalModules: ["aws-sdk"],
+        // Bundle only the required AWS SDK v3 modules
+        nodeModules: [
+          "@aws-sdk/client-ssm",
+          "@aws-sdk/client-timestream-write",
+          "@octokit/rest",
+        ],
       },
     });
 

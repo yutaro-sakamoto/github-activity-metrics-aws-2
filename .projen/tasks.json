@@ -214,13 +214,13 @@
       },
       "steps": [
         {
-          "exec": "npx npm-check-updates@16 --upgrade --target=minor --peer --no-deprecated --dep=dev,peer,prod,optional --filter=@types/jest,@types/node,esbuild,eslint-import-resolver-typescript,eslint-plugin-import,jest,projen,ts-jest,ts-node,typescript,@aws-sdk/client-sns,@aws-sdk/client-ssm,@aws-sdk/client-timestream-write,@octokit/webhooks,aws-lambda,cdk-nag,ip-range-check"
+          "exec": "npx npm-check-updates@16 --upgrade --target=minor --peer --no-deprecated --dep=dev,peer,prod,optional --filter=@types/jest,@types/node,esbuild,eslint-import-resolver-typescript,eslint-plugin-import,jest,projen,ts-jest,ts-node,typescript,@aws-sdk/client-sns,@aws-sdk/client-ssm,@aws-sdk/client-timestream-write,@octokit/rest,@octokit/webhooks,aws-lambda,cdk-nag,ip-range-check"
         },
         {
           "exec": "yarn install --check-files"
         },
         {
-          "exec": "yarn upgrade @stylistic/eslint-plugin @types/jest @types/node @typescript-eslint/eslint-plugin @typescript-eslint/parser aws-cdk esbuild eslint-import-resolver-typescript eslint-plugin-import eslint jest jest-junit projen ts-jest ts-node typescript @aws-sdk/client-sns @aws-sdk/client-ssm @aws-sdk/client-timestream-write @octokit/webhooks aws-cdk-lib aws-lambda cdk-nag constructs ip-range-check"
+          "exec": "yarn upgrade @stylistic/eslint-plugin @types/jest @types/node @typescript-eslint/eslint-plugin @typescript-eslint/parser aws-cdk esbuild eslint-import-resolver-typescript eslint-plugin-import eslint jest jest-junit projen ts-jest ts-node typescript @aws-sdk/client-sns @aws-sdk/client-ssm @aws-sdk/client-timestream-write @octokit/rest @octokit/webhooks aws-cdk-lib aws-lambda cdk-nag constructs ip-range-check"
         },
         {
           "exec": "npx projen"
