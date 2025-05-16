@@ -167,6 +167,17 @@ export class GitHubActivityMetricsStack extends Stack {
       description: "Custom Data API endpoint",
     });
 
+    // Reference GitHub Webhook secret from SSM Parameter Store
+    const githubTokentParam =
+      ssm.StringParameter.fromSecureStringParameterAttributes(
+        this,
+        "GitHubTokenSecret",
+        {
+          parameterName: "/github/metrics/github-token",
+          version: 1, // Specify a specific version or use the latest if unspecified
+        },
+      );
+
     // Create a Lambda function that will be triggered by SNS
     const snsHandler = new NodejsFunction(this, "SnsHandler", {
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -191,6 +202,9 @@ export class GitHubActivityMetricsStack extends Stack {
         ],
       },
     });
+
+    // Grant SSM parameter read permission to the Lambda function
+    githubTokentParam.grantRead(snsHandler);
 
     // Grant Timestream write permissions to the SNS handler Lambda function
     this.addTimestreamWritePermissionsToLambda(
