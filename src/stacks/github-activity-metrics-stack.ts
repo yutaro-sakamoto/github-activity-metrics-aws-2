@@ -180,6 +180,13 @@ export class GitHubActivityMetricsStack extends Stack {
       },
     });
 
+    // Grant Timestream write permissions to the SNS handler Lambda function
+    this.addTimestreamWritePermissionsToLambda(
+      snsHandler,
+      timestreamDatabaseName,
+      githubAPIResultTimestreamTableName,
+    );
+
     // Subscribe the Lambda function to the SNS topic
     githubActivityTopic.addSubscription(
       new snsSubs.LambdaSubscription(snsHandler),
