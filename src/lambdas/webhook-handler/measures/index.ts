@@ -374,7 +374,7 @@ export function getMeasure(event_type: string, payload: any): measureType {
         },
       );
       return {
-        measureName: "issue",
+        measureName: "workflow_run",
         measureValueType: "MULTI",
         measureValues: measureValues,
       };

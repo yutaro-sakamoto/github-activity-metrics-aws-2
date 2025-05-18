@@ -7,16 +7,16 @@ const ssmClient = new SSMClient();
 const timestreamClient = new TimestreamWriteClient();
 
 /**
- * SNS トピックから呼び出されるシンプルなLambda関数
- * メッセージを受信して標準出力に出力します
+ * Simple Lambda function called from an SNS topic
+ * Receives messages and outputs them to standard output
  */
 
 export const handler = async (event: any, context: any) => {
   const { Octokit } = await import("@octokit/rest");
 
-  // SNSメッセージの処理
+  // Processing SNS messages
   try {
-    // SNSイベントからメッセージを取得
+    // Get messages from SNS events
     const records = event.Records || [];
     const secretToken = await getSecretFromParameterStore(
       "/github/metrics/github-token",
@@ -39,7 +39,7 @@ export const handler = async (event: any, context: any) => {
           pull_number: parsedMessage.number,
         });
 
-        // プルリクエストの情報をTimestreamに書き込む
+        // Write pull request information to Timestream
         await sendPullRequestDataToTimestream(
           parsedMessage.organization,
           parsedMessage.repository,
@@ -51,8 +51,8 @@ export const handler = async (event: any, context: any) => {
           parsedMessage.deliveryId,
         );
 
-        // ここで必要な処理を追加できます
-        // このシンプルな例では、メッセージを出力するだけです
+        // Additional processing can be added here
+        // In this simple example, we're just outputting the message
       }
     }
 
