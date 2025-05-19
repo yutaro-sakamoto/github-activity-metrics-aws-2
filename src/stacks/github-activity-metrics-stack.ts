@@ -31,7 +31,7 @@ export class GitHubActivityMetricsStack extends Stack {
     const githubAPIResultTimestreamTableName = "github_api_result";
 
     // Create storage resources (Timestream database and tables)
-    const storage = new Storage(this, "Storage", {
+    new Storage(this, "Storage", {
       databaseName: timestreamDatabaseName,
       githubWebHookTableName: githubWebHookTimestreamTableName,
       customDataTableName: customDataTimestreamTableName,
@@ -145,22 +145,6 @@ export class GitHubActivityMetricsStack extends Stack {
       description: "URL for configuring GitHub Webhook",
     });
 
-    new CfnOutput(this, "TimestreamDatabaseName", {
-      value: storage.timestreamDatabase.ref,
-      description: "Timestream database where GitHub webhook data is stored",
-    });
-
-    new CfnOutput(this, "TimestreamTableName", {
-      value: storage.githubWebHookTimestreamTable.ref,
-      description: "Timestream table where GitHub webhook data is stored",
-    });
-
-    new CfnOutput(this, "ActionsTimestreamTableName", {
-      value: storage.customDataTimestreamTable.ref,
-      description:
-        "Timestream table where GitHub Actions custom data is stored",
-    });
-
     // Output Custom Data API URL
     new CfnOutput(this, "CustomDataApiEndpoint", {
       value: customDataApi.apiUrl,
@@ -217,12 +201,6 @@ export class GitHubActivityMetricsStack extends Stack {
     githubActivityTopic.addSubscription(
       new snsSubs.LambdaSubscription(snsHandler),
     );
-
-    // Output the SNS topic ARN
-    new CfnOutput(this, "GitHubActivityTopicArn", {
-      value: githubActivityTopic.topicArn,
-      description: "SNS Topic ARN for GitHub activity notifications",
-    });
 
     // Configure CDK Nag suppressions
     this.setupNagSuppressions();

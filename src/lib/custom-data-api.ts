@@ -1,7 +1,6 @@
 import { Construct } from "constructs";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import { CfnOutput } from "aws-cdk-lib";
 import * as aws_logs from "aws-cdk-lib/aws-logs";
 
 export interface CustomDataApiProps {
@@ -105,15 +104,5 @@ export class CustomDataApi extends Construct {
 
     // Output API URL
     this.apiUrl = this.api.url;
-
-    new CfnOutput(this, "CustomDataApiUrl", {
-      value: this.api.url,
-      description: "URL for the CustomData API",
-    });
-
-    new CfnOutput(this, "CustomDataApiKeyId", {
-      value: this.apiKey.keyId,
-      description: "CustomData API Key ID",
-    });
   }
 }
