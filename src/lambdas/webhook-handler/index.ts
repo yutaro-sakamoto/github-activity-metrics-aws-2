@@ -7,7 +7,6 @@ import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 import { Webhooks } from "@octokit/webhooks";
 import ipRangeCheck from "ip-range-check";
 import { getMeasure } from "./measures";
-import { sns } from "cdk-nag/lib/rules";
 
 // Define GitHub IP ranges
 const GITHUB_IP_RANGES = [
