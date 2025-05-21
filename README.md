@@ -1,3 +1,7 @@
+> [!CAUTION]
+> New customer access to Amazon Timestream for LiveAnalytics, which is a core of this system, will be closed on 6/20/25.
+> https://aws.amazon.com/about-aws/whats-new/2025/05/aws-service-changes/
+
 This project constructs the instructure which collects GitHub Webhook data, stores it and visualizes it.
 
 ![GitHub webhook visualize architecture](asset/github_webhook_visualize_architecture.drawio.png)
