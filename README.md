@@ -1,6 +1,9 @@
 > [!CAUTION]
-> New customer access to Amazon Timestream for LiveAnalytics, which is a core of this system, will be closed on 6/20/25.
-> https://aws.amazon.com/about-aws/whats-new/2025/05/aws-service-changes/
+> github-activity-metrics-aws-2 is a new version of [github-activity-metrics-aws](https://github.com/yutaro-sakamoto/github-activity-metrics-aws).
+
+
+
+**Under construction**
 
 This project constructs the instructure which collects GitHub Webhook data, stores it and visualizes it.
 
