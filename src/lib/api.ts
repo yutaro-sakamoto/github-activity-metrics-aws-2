@@ -1,11 +1,11 @@
-import { RemovalPolicy } from "aws-cdk-lib";
-import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
-import * as apigatewayv2_integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
-import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
-import * as s3 from "aws-cdk-lib/aws-s3";
-import { NagSuppressions } from "cdk-nag";
-import { Construct } from "constructs";
-import { EnvName } from "./envName";
+import { RemovalPolicy } from 'aws-cdk-lib';
+import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigatewayv2_integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { NagSuppressions } from 'cdk-nag';
+import { Construct } from 'constructs';
+import { EnvName } from './envName';
 
 export interface ApiProps {
   /**
@@ -35,13 +35,13 @@ export class Api extends Construct {
     const { webhookHandler } = props;
 
     const removalPolicy =
-      props.envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
-    const autoDeleteObjects = props.envName === "dev";
+      props.envName === 'prod' ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+    const autoDeleteObjects = props.envName === 'dev';
 
     // Create access log bucket and log group for API Gateway
     const apiGatewayAccessLogsBucket = new s3.Bucket(
       this,
-      "ApiGatewayAccessLogsBucket",
+      'ApiGatewayAccessLogsBucket',
       {
         removalPolicy,
         autoDeleteObjects,
@@ -54,24 +54,24 @@ export class Api extends Construct {
     // CDK Nag suppression settings for access log bucket
     NagSuppressions.addResourceSuppressions(apiGatewayAccessLogsBucket, [
       {
-        id: "AwsSolutions-S1",
-        reason: "Access logs are not enabled for the access logs bucket",
+        id: 'AwsSolutions-S1',
+        reason: 'Access logs are not enabled for the access logs bucket',
       },
     ]);
 
     // HTTP API Gateway (for GitHub Webhooks)
-    this.api = new apigatewayv2.HttpApi(this, "GitHubWebhookApi", {
-      apiName: "GitHub Webhook API",
-      description: "API for receiving GitHub webhooks",
+    this.api = new apigatewayv2.HttpApi(this, 'GitHubWebhookApi', {
+      apiName: 'GitHub Webhook API',
+      description: 'API for receiving GitHub webhooks',
       createDefaultStage: false, // Do not create default stage
       corsPreflight: {
-        allowOrigins: ["*"],
+        allowOrigins: ['*'],
         allowMethods: [apigatewayv2.CorsHttpMethod.POST],
         allowHeaders: [
-          "Content-Type",
-          "X-GitHub-Event",
-          "X-GitHub-Delivery",
-          "X-Hub-Signature-256",
+          'Content-Type',
+          'X-GitHub-Event',
+          'X-GitHub-Delivery',
+          'X-Hub-Signature-256',
         ],
       },
     });
@@ -79,21 +79,21 @@ export class Api extends Construct {
     // Create Lambda integration - Process GitHub webhooks
     const webhookIntegration =
       new apigatewayv2_integrations.HttpLambdaIntegration(
-        "WebhookIntegration",
+        'WebhookIntegration',
         webhookHandler,
       );
 
     // Add route for webhooks
     this.api.addRoutes({
-      path: "/webhooks",
+      path: '/webhooks',
       methods: [apigatewayv2.HttpMethod.POST],
       integration: webhookIntegration,
     });
 
-    const stageName = "prod";
+    const stageName = 'prod';
 
     // Create explicit stage
-    const stage = new apigatewayv2.CfnStage(this, "V2Stage", {
+    const stage = new apigatewayv2.CfnStage(this, 'V2Stage', {
       apiId: this.api.apiId,
       stageName: stageName,
       autoDeploy: true, // Configure automatic deployment of API changes
@@ -106,8 +106,8 @@ export class Api extends Construct {
 
     NagSuppressions.addResourceSuppressions(stage, [
       {
-        id: "AwsSolutions-APIG1",
-        reason: "API Gateway stage does not have access logs enabled",
+        id: 'AwsSolutions-APIG1',
+        reason: 'API Gateway stage does not have access logs enabled',
       },
     ]);
 

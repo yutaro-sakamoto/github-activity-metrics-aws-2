@@ -1,7 +1,7 @@
-import { Construct } from "constructs";
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as aws_logs from "aws-cdk-lib/aws-logs";
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as aws_logs from 'aws-cdk-lib/aws-logs';
+import { Construct } from 'constructs';
 
 export interface CustomDataApiProps {
   /**
@@ -45,16 +45,16 @@ export class CustomDataApi extends Construct {
     super(scope, id);
 
     // Create REST API
-    this.api = new apigateway.RestApi(this, "RestApi", {
-      restApiName: "Custom Data API",
-      description: "Write custom data sent by users to Timestream",
+    this.api = new apigateway.RestApi(this, 'RestApi', {
+      restApiName: 'Custom Data API',
+      description: 'Write custom data sent by users to Timestream',
       deployOptions: {
-        stageName: "prod",
+        stageName: 'prod',
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         accessLogDestination: new apigateway.LogGroupLogDestination(
-          new aws_logs.LogGroup(this, "CustomDataApiAccessLogs", {
+          new aws_logs.LogGroup(this, 'CustomDataApiAccessLogs', {
             retention: aws_logs.RetentionDays.ONE_MONTH,
           }),
         ),
@@ -67,13 +67,13 @@ export class CustomDataApi extends Construct {
     });
 
     // Create API Key
-    this.apiKey = new apigateway.ApiKey(this, "ApiKey", {
+    this.apiKey = new apigateway.ApiKey(this, 'ApiKey', {
       apiKeyName: props.apiKeyName,
       enabled: true,
     });
 
     // Create usage plan
-    this.usagePlan = new apigateway.UsagePlan(this, "UsagePlan", {
+    this.usagePlan = new apigateway.UsagePlan(this, 'UsagePlan', {
       name: props.usagePlanName,
       apiStages: [
         {
@@ -95,10 +95,10 @@ export class CustomDataApi extends Construct {
     this.usagePlan.addApiKey(this.apiKey);
 
     // Create a /data resource
-    const data = this.api.root.addResource("data");
+    const data = this.api.root.addResource('data');
 
     // Add GET method
-    data.addMethod("POST", new apigateway.LambdaIntegration(props.handler), {
+    data.addMethod('POST', new apigateway.LambdaIntegration(props.handler), {
       apiKeyRequired: true, // API Key required for this method
     });
 

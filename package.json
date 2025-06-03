@@ -42,6 +42,8 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@aws-sdk/client-glue": "^3.821.0",
+    "@aws-sdk/client-s3": "^3.821.0",
     "@aws-sdk/client-sns": "^3.821.0",
     "@aws-sdk/client-ssm": "^3.821.0",
     "@aws-sdk/client-timestream-write": "^3.821.0",

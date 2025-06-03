@@ -1,10 +1,7 @@
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
-import {
-  TimestreamWriteClient,
-  WriteRecordsCommand,
-} from "@aws-sdk/client-timestream-write";
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 const ssmClient = new SSMClient();
-const timestreamClient = new TimestreamWriteClient();
+const s3Client = new S3Client();
 
 /**
  * Simple Lambda function called from an SNS topic
@@ -12,20 +9,20 @@ const timestreamClient = new TimestreamWriteClient();
  */
 
 export const handler = async (event: any, context: any) => {
-  const { Octokit } = await import("@octokit/rest");
+  const { Octokit } = await import('@octokit/rest');
 
   // Processing SNS messages
   try {
     // Get messages from SNS events
     const records = event.Records || [];
     const secretToken = await getSecretFromParameterStore(
-      "/github/metrics/github-token",
+      '/github/metrics/github-token',
     );
 
     for (const record of records) {
       if (record.Sns) {
         const message = record.Sns.Message;
-        console.log("SNS message:", message);
+        console.log('SNS message:', message);
 
         const parsedMessage = JSON.parse(message);
 
@@ -39,8 +36,8 @@ export const handler = async (event: any, context: any) => {
           pull_number: parsedMessage.number,
         });
 
-        // Write pull request information to Timestream
-        await sendPullRequestDataToTimestream(
+        // Write pull request information to S3
+        await sendPullRequestDataToS3(
           parsedMessage.organization,
           parsedMessage.repository,
           parsedMessage.number,
@@ -58,14 +55,14 @@ export const handler = async (event: any, context: any) => {
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: "success" }),
+      body: JSON.stringify({ message: 'success' }),
     };
   } catch (error) {
-    console.error("Unknown error:", error);
+    console.error('Unknown error:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: "Unknown error",
+        message: 'Unknown error',
       }),
     };
   }
@@ -85,13 +82,13 @@ async function getSecretFromParameterStore(
     const response = await ssmClient.send(command);
     return response.Parameter!.Value!;
   } catch (error) {
-    console.error("Error fetching parameter from SSM:", error);
+    console.error('Error fetching parameter from SSM:', error);
     throw error;
   }
 }
 
-// Function to send PR data to Timestream
-async function sendPullRequestDataToTimestream(
+// Function to send PR data to S3
+async function sendPullRequestDataToS3(
   organization: string,
   repository: string,
   pullNumber: number,
@@ -101,51 +98,47 @@ async function sendPullRequestDataToTimestream(
   action: string,
   deliveryId: string,
 ) {
-  // Get current timestamp in milliseconds
-  const currentTime = Date.now().toString();
+  // Get current timestamp
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  const hour = String(now.getUTCHours()).padStart(2, '0');
+  const timestamp = now.toISOString();
 
-  // Create dimensions (metadata) for the record
-  const dimensions = [
-    { Name: "organization", Value: organization },
-    { Name: "repository", Value: repository },
-    { Name: "pull_number", Value: pullNumber.toString() },
-    { Name: "action", Value: action },
-    { Name: "delivery_id", Value: deliveryId },
-    { Name: "event_type", Value: "pull_request" },
-  ];
+  // Create structured record for S3
+  const structuredRecord = {
+    timestamp,
+    event_type: 'pull_request_api_result',
+    organization,
+    repository,
+    pull_number: pullNumber,
+    action,
+    delivery_id: deliveryId,
+    pr_changed_files: changedFiles,
+    pr_additions: additions,
+    pr_deletions: deletions,
+  };
 
-  // Create a single record with multiple measure values
-  const records = [
-    {
-      Dimensions: dimensions,
-      MeasureName: "pr_stats",
-      MeasureValueType: "MULTI",
-      MeasureValues: [
-        {
-          Name: "pr_changed_files",
-          Value: changedFiles.toString(),
-          Type: "BIGINT",
-        },
-        { Name: "pr_additions", Value: additions.toString(), Type: "BIGINT" },
-        { Name: "pr_deletions", Value: deletions.toString(), Type: "BIGINT" },
-      ],
-      Time: currentTime,
-    },
-  ];
+  // Create S3 key with partitioning
+  // Format: github_api_result/year=<yyyy>/month=<mm>/day=<dd>/hour=<hh>/<timestamp>_<delivery_id>.json
+  const key = `github_api_result/year=${year}/month=${month}/day=${day}/hour=${hour}/${timestamp}_${deliveryId}.json`;
 
   try {
     const params = {
-      DatabaseName: process.env.TIMESTREAM_DATABASE_NAME!,
-      TableName: process.env.TIMESTREAM_TABLE_NAME!,
-      Records: records,
+      Bucket: process.env.RAW_DATA_BUCKET!,
+      Key: key,
+      Body: JSON.stringify(structuredRecord),
+      ContentType: 'application/json',
     };
 
-    const command = new WriteRecordsCommand(params);
-    const result = await timestreamClient.send(command);
-    console.log("Successfully wrote PR data to Timestream:", result);
+    const command = new PutObjectCommand(params);
+    const result = await s3Client.send(command);
+    console.log('Successfully wrote PR data to S3:', result);
+    console.log(`Successfully wrote to S3: ${key}`);
     return result;
   } catch (error) {
-    console.error("Error sending PR data to Timestream:", error);
+    console.error('Error sending PR data to S3:', error);
     throw error;
   }
 }

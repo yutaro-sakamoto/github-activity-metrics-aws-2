@@ -1,172 +1,224 @@
-import { Duration, RemovalPolicy } from "aws-cdk-lib";
-import * as backup from "aws-cdk-lib/aws-backup";
-import { Schedule } from "aws-cdk-lib/aws-events";
-import * as timestream from "aws-cdk-lib/aws-timestream";
-import { NagSuppressions } from "cdk-nag";
-import { Construct } from "constructs";
+import * as path from 'path';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import * as athena from 'aws-cdk-lib/aws-athena';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as glue from 'aws-cdk-lib/aws-glue';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { NagSuppressions } from 'cdk-nag';
+import { Construct } from 'constructs';
 
 export interface StorageProps {
   /**
-   * Timestream database name
+   * S3 bucket prefix for raw data bucket
    */
-  databaseName: string;
+  rawDataBucketPrefix: string;
   /**
-   * Timestream table name for webhook events
+   * S3 bucket prefix for consolidated data bucket
    */
-  githubWebHookTableName: string;
+  consolidatedDataBucketPrefix: string;
   /**
-   * Timestream table name for GitHub Actions custom data
-   * @default "github_actions_data"
+   * Glue database name
    */
-  customDataTableName: string;
+  glueDatabaseName: string;
   /**
-   * Timestream table name for GitHub API result
-   * @default "github_api_result"
+   * Athena workgroup name
    */
-  githubAPIResultTableName: string;
+  athenaWorkgroupName: string;
 }
 
 export class Storage extends Construct {
   /**
-   * Timestream database that stores GitHub webhook data
+   * S3 bucket for raw GitHub webhook data (Bucket A)
    */
-  public readonly timestreamDatabase: timestream.CfnDatabase;
+  public readonly rawDataBucket: s3.Bucket;
 
   /**
-   * Timestream table for webhook events
+   * S3 bucket for consolidated data (Bucket B)
    */
-  public readonly githubWebHookTimestreamTable: timestream.CfnTable;
+  public readonly consolidatedDataBucket: s3.Bucket;
 
   /**
-   * Timestream table for GitHub Actions custom data
+   * Glue database for Athena queries
    */
-  public readonly customDataTimestreamTable: timestream.CfnTable;
+  public readonly glueDatabase: glue.CfnDatabase;
 
   /**
-   * Timestream table for GitHub API result
+   * Athena workgroup
    */
-  public readonly githubAPIResultTimestreamTable: timestream.CfnTable;
+  public readonly athenaWorkgroup: athena.CfnWorkGroup;
 
   /**
-   * AWS Backup Vault for storing backups
+   * Lambda function for daily consolidation
    */
-  public readonly backupVault: backup.BackupVault;
+  public readonly consolidationLambda: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: StorageProps) {
     super(scope, id);
 
-    // Timestream database for GitHub webhook data
-    this.timestreamDatabase = new timestream.CfnDatabase(
-      this,
-      "MetricsDatabase",
-      {
-        databaseName: props.databaseName,
-      },
-    );
-
-    // Timestream table for storing GitHub webhook events
-    this.githubWebHookTimestreamTable = new timestream.CfnTable(
-      this,
-      "GitHubWebhookTable",
-      {
-        databaseName: props.databaseName,
-        tableName: props.githubWebHookTableName,
-        retentionProperties: {
-          memoryStoreRetentionPeriodInHours: "24", // 1 day in memory store
-          magneticStoreRetentionPeriodInDays: "365", // 1 year in magnetic store
+    // S3 bucket for raw webhook data (Bucket A)
+    this.rawDataBucket = new s3.Bucket(this, 'RawDataBucket', {
+      bucketName: `${props.rawDataBucketPrefix}-raw-webhook-data`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      lifecycleRules: [
+        {
+          id: 'DeleteOldRawData',
+          enabled: true,
+          expiration: Duration.days(7), // Keep raw data for 7 days
         },
-      },
-    );
-
-    // Timestream table for storing GitHub Actions custom data
-    this.customDataTimestreamTable = new timestream.CfnTable(
-      this,
-      "CustomDataTable",
-      {
-        databaseName: props.databaseName,
-        tableName: props.customDataTableName,
-        retentionProperties: {
-          memoryStoreRetentionPeriodInHours: "24", // 1 day in memory store
-          magneticStoreRetentionPeriodInDays: "365", // 1 year in magnetic store
-        },
-      },
-    );
-
-    // Timestream table for storing GitHub API result
-    this.githubAPIResultTimestreamTable = new timestream.CfnTable(
-      this,
-      "GitHubAPIResultTable",
-      {
-        databaseName: props.databaseName,
-        tableName: props.githubAPIResultTableName,
-        retentionProperties: {
-          memoryStoreRetentionPeriodInHours: "24", // 1 day in memory store
-          magneticStoreRetentionPeriodInDays: "365", // 1 year in magnetic store
-        },
-      },
-    );
-
-    // Add dependency to ensure the database is created before the tables
-    this.githubWebHookTimestreamTable.addDependency(this.timestreamDatabase);
-    this.customDataTimestreamTable.addDependency(this.timestreamDatabase);
-    this.githubAPIResultTimestreamTable.addDependency(this.timestreamDatabase);
-
-    // Create AWS Backup Vault to store backups
-    this.backupVault = new backup.BackupVault(this, "MetricsBackupVault", {
-      backupVaultName: "metrics-backup-vault",
-      removalPolicy: RemovalPolicy.RETAIN, // Retain the vault even if the stack is deleted
+      ],
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    // Create AWS Backup Plan
-    const backupPlan = new backup.BackupPlan(this, "MetricsBackupPlan", {
-      backupPlanName: "metrics-daily-backup",
-      backupVault: this.backupVault,
+    // S3 bucket for consolidated data (Bucket B)
+    this.consolidatedDataBucket = new s3.Bucket(this, 'ConsolidatedDataBucket', {
+      bucketName: `${props.consolidatedDataBucketPrefix}-consolidated-webhook-data`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      lifecycleRules: [
+        {
+          id: 'TransitionToGlacier',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.GLACIER_INSTANT_RETRIEVAL,
+              transitionAfter: Duration.days(90),
+            },
+          ],
+        },
+      ],
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    // Add backup rule - daily backup at 3:00 AM JST (18:00 UTC), 2 weeks retention
-    backupPlan.addRule(
-      new backup.BackupPlanRule({
-        ruleName: "DailyBackup-3AM-JST",
-        scheduleExpression: Schedule.cron({
-          minute: "0",
-          hour: "18", // 18:00 UTC = 3:00 AM JST
-          month: "*",
-          weekDay: "*",
-          year: "*",
-        }),
-        deleteAfter: Duration.days(14), // 2 weeks retention
+    // Glue database for Athena
+    this.glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
+      catalogId: Stack.of(this).account,
+      databaseInput: {
+        name: props.glueDatabaseName,
+        description: 'Database for GitHub webhook analytics',
+      },
+    });
+
+    // Athena workgroup
+    const athenaResultsBucket = new s3.Bucket(this, 'AthenaResultsBucket', {
+      bucketName: `${props.athenaWorkgroupName}-athena-results`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'DeleteOldResults',
+          enabled: true,
+          expiration: Duration.days(30),
+        },
+      ],
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    this.athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
+      name: props.athenaWorkgroupName,
+      workGroupConfiguration: {
+        resultConfiguration: {
+          outputLocation: `s3://${athenaResultsBucket.bucketName}/`,
+          encryptionConfiguration: {
+            encryptionOption: 'SSE_S3',
+          },
+        },
+        enforceWorkGroupConfiguration: true,
+      },
+    });
+
+    // Lambda function for daily data consolidation
+    this.consolidationLambda = new NodejsFunction(this, 'ConsolidationLambda', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambdas/consolidation-handler/index.ts'),
+      environment: {
+        RAW_DATA_BUCKET: this.rawDataBucket.bucketName,
+        CONSOLIDATED_DATA_BUCKET: this.consolidatedDataBucket.bucketName,
+        GLUE_DATABASE: props.glueDatabaseName,
+      },
+      timeout: Duration.minutes(15),
+      memorySize: 3008,
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        externalModules: ['aws-sdk'],
+        nodeModules: [
+          '@aws-sdk/client-s3',
+          '@aws-sdk/client-glue',
+        ],
+      },
+    });
+
+    // Grant Lambda permissions
+    this.rawDataBucket.grantRead(this.consolidationLambda);
+    this.consolidatedDataBucket.grantWrite(this.consolidationLambda);
+
+    // Add Glue permissions to Lambda
+    this.consolidationLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'glue:CreateTable',
+          'glue:UpdateTable',
+          'glue:GetTable',
+          'glue:GetDatabase',
+          'glue:CreatePartition',
+          'glue:UpdatePartition',
+          'glue:GetPartition',
+          'glue:BatchCreatePartition',
+        ],
+        resources: [
+          `arn:aws:glue:${Stack.of(this).region}:${Stack.of(this).account}:catalog`,
+          `arn:aws:glue:${Stack.of(this).region}:${Stack.of(this).account}:database/${props.glueDatabaseName}`,
+          `arn:aws:glue:${Stack.of(this).region}:${Stack.of(this).account}:table/${props.glueDatabaseName}/*`,
+        ],
       }),
     );
 
-    // Select the Timestream tables as the resources to back up
-    backupPlan.addSelection("TimestreamSelection", {
-      resources: [
-        backup.BackupResource.fromArn(
-          this.githubWebHookTimestreamTable.attrArn,
-        ),
-        backup.BackupResource.fromArn(this.customDataTimestreamTable.attrArn),
-        backup.BackupResource.fromArn(
-          this.githubAPIResultTimestreamTable.attrArn,
-        ),
-      ],
+    // Schedule daily consolidation at 1:00 AM UTC
+    const consolidationRule = new events.Rule(this, 'ConsolidationSchedule', {
+      schedule: events.Schedule.cron({
+        minute: '0',
+        hour: '1',
+        day: '*',
+        month: '*',
+        year: '*',
+      }),
     });
+
+    consolidationRule.addTarget(new targets.LambdaFunction(this.consolidationLambda));
 
     // CDK Nag suppressions
     NagSuppressions.addResourceSuppressions(
       [
-        this.timestreamDatabase,
-        this.githubWebHookTimestreamTable,
-        this.customDataTimestreamTable,
+        this.rawDataBucket,
+        this.consolidatedDataBucket,
+        athenaResultsBucket,
+        this.consolidationLambda,
       ],
       [
         {
-          id: "AwsSolutions-IAM4",
-          reason: "Managed policies are acceptable during the prototype phase",
+          id: 'AwsSolutions-S1',
+          reason: 'Server access logging not required for prototype',
         },
         {
-          id: "AwsSolutions-IAM5",
-          reason:
-            "Wildcard permissions are acceptable during the prototype phase",
+          id: 'AwsSolutions-IAM4',
+          reason: 'Managed policies are acceptable during the prototype phase',
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Wildcard permissions are acceptable during the prototype phase',
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason: 'Latest runtime version check can be ignored for prototype',
         },
       ],
     );

@@ -1,17 +1,16 @@
-import * as path from "path";
-import { Stack, StackProps, CfnOutput, Duration } from "aws-cdk-lib";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
-import * as ssm from "aws-cdk-lib/aws-ssm";
-import * as sns from "aws-cdk-lib/aws-sns";
-import * as snsSubs from "aws-cdk-lib/aws-sns-subscriptions";
-import { NagSuppressions } from "cdk-nag";
-import { Construct } from "constructs";
-import { Api } from "../lib/api";
-import { EnvName } from "../lib/envName";
-import { Storage } from "../lib/storage";
-import { CustomDataApi } from "../lib/custom-data-api";
+import * as path from 'path';
+import { Stack, StackProps, CfnOutput, Duration } from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubs from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { NagSuppressions } from 'cdk-nag';
+import { Construct } from 'constructs';
+import { Api } from '../lib/api';
+import { CustomDataApi } from '../lib/custom-data-api';
+import { EnvName } from '../lib/envName';
+import { Storage } from '../lib/storage';
 
 export interface GitHubActivityMetricsStackProps extends StackProps {
   envName: EnvName;
@@ -25,45 +24,39 @@ export class GitHubActivityMetricsStack extends Stack {
   ) {
     super(scope, id, props);
 
-    const timestreamDatabaseName = "metrics";
-    const githubWebHookTimestreamTableName = "github_webhook";
-    const customDataTimestreamTableName = "custom_data";
-    const githubAPIResultTimestreamTableName = "github_api_result";
-
-    // Create storage resources (Timestream database and tables)
-    new Storage(this, "Storage", {
-      databaseName: timestreamDatabaseName,
-      githubWebHookTableName: githubWebHookTimestreamTableName,
-      customDataTableName: customDataTimestreamTableName,
-      githubAPIResultTableName: githubAPIResultTimestreamTableName,
+    // Create storage resources (S3 buckets, Glue database, and Athena)
+    const storage = new Storage(this, 'Storage', {
+      rawDataBucketPrefix: `${props.envName}-github-metrics`,
+      consolidatedDataBucketPrefix: `${props.envName}-github-metrics`,
+      glueDatabaseName: 'github_metrics_db',
+      athenaWorkgroupName: `github-metrics-${props.envName}`,
     });
 
     // Reference GitHub Webhook secret from SSM Parameter Store
     const webhookSecretParam =
       ssm.StringParameter.fromSecureStringParameterAttributes(
         this,
-        "GitHubWebhookSecret",
+        'GitHubWebhookSecret',
         {
-          parameterName: "/github/metrics/secret-token",
+          parameterName: '/github/metrics/secret-token',
           version: 1, // Specify a specific version or use the latest if unspecified
         },
       );
 
     // Create an SNS topic for GitHub activity notifications
-    const githubActivityTopic = new sns.Topic(this, "GitHubActivityTopic", {
-      displayName: `call-github-api`,
-      topicName: `call-github-api`,
+    const githubActivityTopic = new sns.Topic(this, 'GitHubActivityTopic', {
+      displayName: 'call-github-api',
+      topicName: 'call-github-api',
       enforceSSL: true,
     });
 
     // Lambda function - Validates GitHub webhooks and sends data to Timestream
-    const webhookHandler = new NodejsFunction(this, "WebhookHandler", {
+    const webhookHandler = new NodejsFunction(this, 'WebhookHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "handler",
-      entry: path.join(__dirname, "../lambdas/webhook-handler/index.ts"),
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambdas/webhook-handler/index.ts'),
       environment: {
-        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-        TIMESTREAM_TABLE_NAME: githubWebHookTimestreamTableName,
+        RAW_DATA_BUCKET: storage.rawDataBucket.bucketName,
         SNS_TOPIC_ARN: githubActivityTopic.topicArn,
       },
       timeout: Duration.seconds(30),
@@ -71,12 +64,12 @@ export class GitHubActivityMetricsStack extends Stack {
       bundling: {
         minify: true,
         sourceMap: true,
-        externalModules: ["aws-sdk"],
+        externalModules: ['aws-sdk'],
         // Bundle only the required AWS SDK v3 modules
         nodeModules: [
-          "@aws-sdk/client-ssm",
-          "@aws-sdk/client-timestream-write",
-          "@aws-sdk/client-sns",
+          '@aws-sdk/client-ssm',
+          '@aws-sdk/client-s3',
+          '@aws-sdk/client-sns',
         ],
       },
     });
@@ -87,15 +80,11 @@ export class GitHubActivityMetricsStack extends Stack {
     // Grant webhook lambda permission to publish to SNS topic
     githubActivityTopic.grantPublish(webhookHandler);
 
-    // Grant Timestream write permissions to the Lambda function
-    this.addTimestreamWritePermissionsToLambda(
-      webhookHandler,
-      timestreamDatabaseName,
-      githubWebHookTimestreamTableName,
-    );
+    // Grant S3 write permissions to the Lambda function
+    storage.rawDataBucket.grantWrite(webhookHandler);
 
     // API Gateway
-    const api = new Api(this, "ApiGateway", {
+    const api = new Api(this, 'ApiGateway', {
       webhookHandler,
       envName: props.envName,
     });
@@ -103,86 +92,80 @@ export class GitHubActivityMetricsStack extends Stack {
     // Create Custom Data API handler Lambda function
     const customDataApiHandler = new NodejsFunction(
       this,
-      "CustomDataApiHandler",
+      'CustomDataApiHandler',
       {
         runtime: lambda.Runtime.NODEJS_22_X,
-        handler: "handler",
+        handler: 'handler',
         environment: {
-          TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-          TIMESTREAM_TABLE_NAME: customDataTimestreamTableName,
+          RAW_DATA_BUCKET: storage.rawDataBucket.bucketName,
         },
         entry: path.join(
           __dirname,
-          "../lambdas/custom-data-api-handler/index.ts",
+          '../lambdas/custom-data-api-handler/index.ts',
         ),
         timeout: Duration.seconds(10),
         memorySize: 128,
         bundling: {
           minify: true,
           sourceMap: true,
-          externalModules: ["aws-sdk"],
+          externalModules: ['aws-sdk'],
         },
       },
     );
 
-    // Grant Timestream write permissions to the Custom Data API handler
-    this.addTimestreamWritePermissionsToLambda(
-      customDataApiHandler,
-      timestreamDatabaseName,
-      customDataTimestreamTableName,
-    );
+    // Grant S3 write permissions to the Custom Data API handler
+    storage.rawDataBucket.grantWrite(customDataApiHandler);
 
     // Create Custom Data API with API Key authentication
-    const customDataApi = new CustomDataApi(this, "CustomDataApiGateway", {
+    const customDataApi = new CustomDataApi(this, 'CustomDataApiGateway', {
       handler: customDataApiHandler,
       apiKeyName: `custom-data-api-key-${props.envName}`,
       usagePlanName: `custom-data-api-usage-plan-${props.envName}`,
     });
 
     // Output values
-    new CfnOutput(this, "WebhookApiUrl", {
+    new CfnOutput(this, 'WebhookApiUrl', {
       value: api.webhookUrl,
-      description: "URL for configuring GitHub Webhook",
+      description: 'URL for configuring GitHub Webhook',
     });
 
     // Output Custom Data API URL
-    new CfnOutput(this, "CustomDataApiEndpoint", {
+    new CfnOutput(this, 'CustomDataApiEndpoint', {
       value: customDataApi.apiUrl,
-      description: "Custom Data API endpoint",
+      description: 'Custom Data API endpoint',
     });
 
     // Reference GitHub Webhook secret from SSM Parameter Store
     const githubTokentParam =
       ssm.StringParameter.fromSecureStringParameterAttributes(
         this,
-        "GitHubTokenSecret",
+        'GitHubTokenSecret',
         {
-          parameterName: "/github/metrics/github-token",
+          parameterName: '/github/metrics/github-token',
           version: 1, // Specify a specific version or use the latest if unspecified
         },
       );
 
     // Create a Lambda function that will be triggered by SNS
-    const snsHandler = new NodejsFunction(this, "SnsHandler", {
+    const snsHandler = new NodejsFunction(this, 'SnsHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: "handler",
-      entry: path.join(__dirname, "../lambdas/sns-handler/index.ts"),
+      handler: 'handler',
+      entry: path.join(__dirname, '../lambdas/sns-handler/index.ts'),
       timeout: Duration.seconds(30),
       memorySize: 128,
-      description: "Processes messages from GitHub activity SNS topic",
+      description: 'Processes messages from GitHub activity SNS topic',
       environment: {
-        TIMESTREAM_DATABASE_NAME: timestreamDatabaseName,
-        TIMESTREAM_TABLE_NAME: githubAPIResultTimestreamTableName,
+        RAW_DATA_BUCKET: storage.rawDataBucket.bucketName,
       },
       bundling: {
         minify: true,
         sourceMap: true,
-        externalModules: ["aws-sdk"],
+        externalModules: ['aws-sdk'],
         // Bundle only the required AWS SDK v3 modules
         nodeModules: [
-          "@aws-sdk/client-ssm",
-          "@aws-sdk/client-timestream-write",
-          "@octokit/rest",
+          '@aws-sdk/client-ssm',
+          '@aws-sdk/client-s3',
+          '@octokit/rest',
         ],
       },
     });
@@ -190,12 +173,8 @@ export class GitHubActivityMetricsStack extends Stack {
     // Grant SSM parameter read permission to the Lambda function
     githubTokentParam.grantRead(snsHandler);
 
-    // Grant Timestream write permissions to the SNS handler Lambda function
-    this.addTimestreamWritePermissionsToLambda(
-      snsHandler,
-      timestreamDatabaseName,
-      githubAPIResultTimestreamTableName,
-    );
+    // Grant S3 write permissions to the SNS handler Lambda function
+    storage.rawDataBucket.grantWrite(snsHandler);
 
     // Subscribe the Lambda function to the SNS topic
     githubActivityTopic.addSubscription(
@@ -206,43 +185,6 @@ export class GitHubActivityMetricsStack extends Stack {
     this.setupNagSuppressions();
   }
 
-  /**
-   * Add Timestream write permissions to the Lambda function
-   * @param lambdaFunction the Lambda function to which permissions will be added
-   * @param databaseName Timestream database name
-   * @param tableName Timestream table name
-   */
-  private addTimestreamWritePermissionsToLambda(
-    lambdaFunction: NodejsFunction,
-    databaseName: string,
-    tableName: string,
-  ) {
-    // Grant Timestream write permissions to the Lambda function
-    lambdaFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:WriteRecords", "timestream:DescribeTable"],
-        resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${databaseName}/table/${tableName}`,
-        ],
-      }),
-    );
-
-    lambdaFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:DescribeDatabase"],
-        resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${databaseName}`,
-        ],
-      }),
-    );
-
-    lambdaFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["timestream:DescribeEndpoints"],
-        resources: ["*"],
-      }),
-    );
-  }
 
   /**
    * Configure CDK Nag warning suppressions
@@ -252,32 +194,32 @@ export class GitHubActivityMetricsStack extends Stack {
       this,
       [
         {
-          id: "AwsSolutions-IAM4",
-          reason: "Managed policies are acceptable during the prototype phase",
+          id: 'AwsSolutions-IAM4',
+          reason: 'Managed policies are acceptable during the prototype phase',
         },
         {
-          id: "AwsSolutions-L1",
-          reason: "Demo Lambda functions use inline code",
+          id: 'AwsSolutions-L1',
+          reason: 'Demo Lambda functions use inline code',
         },
         {
-          id: "AwsSolutions-IAM5",
+          id: 'AwsSolutions-IAM5',
           reason:
-            "Wildcard permissions are acceptable during the prototype phase",
+            'Wildcard permissions are acceptable during the prototype phase',
         },
         {
-          id: "AwsSolutions-APIG2",
+          id: 'AwsSolutions-APIG2',
           reason:
-            "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
+            'GitHub webhooks require custom authentication, request validation is implemented with Lambda integration',
         },
         {
-          id: "AwsSolutions-APIG4",
+          id: 'AwsSolutions-APIG4',
           reason:
-            "GitHub webhooks require custom authentication, request validation is implemented with Lambda integration",
+            'GitHub webhooks require custom authentication, request validation is implemented with Lambda integration',
         },
         {
-          id: "AwsSolutions-COG4",
+          id: 'AwsSolutions-COG4',
           reason:
-            "GitHub webhooks use custom Lambda integration instead of Cognito user pools",
+            'GitHub webhooks use custom Lambda integration instead of Cognito user pools',
         },
       ],
       true,

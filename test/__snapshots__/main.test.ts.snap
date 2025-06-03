@@ -33,16 +33,49 @@ exports[`Snapshot 1`] = `
     },
   },
   "Outputs": {
-    "TimestreamDatabaseName": {
-      "Description": "Timestream database where GitHub webhook data is stored",
+    "CustomDataApiEndpoint": {
+      "Description": "Custom Data API endpoint",
       "Value": {
-        "Ref": "StorageGitHubWebhookDatabase916D4ADC",
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            ".execute-api.ap-northeast-1.",
+            {
+              "Ref": "AWS::URLSuffix",
+            },
+            "/",
+            {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "/",
+          ],
+        ],
       },
     },
-    "TimestreamTableName": {
-      "Description": "Timestream table where GitHub webhook data is stored",
+    "CustomDataApiGatewayRestApiEndpoint74A7CDCA": {
       "Value": {
-        "Ref": "StorageGitHubWebhookTable62713D45",
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            ".execute-api.ap-northeast-1.",
+            {
+              "Ref": "AWS::URLSuffix",
+            },
+            "/",
+            {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "/",
+          ],
+        ],
       },
     },
     "WebhookApiUrl": {
@@ -57,7 +90,7 @@ exports[`Snapshot 1`] = `
                 "ApiEndpoint",
               ],
             },
-            "/v2/webhooks",
+            "/prod/webhooks",
           ],
         ],
       },
@@ -259,58 +292,50 @@ exports[`Snapshot 1`] = `
           "ThrottlingBurstLimit": 100,
           "ThrottlingRateLimit": 50,
         },
-        "StageName": "v2",
+        "StageName": "prod",
       },
       "Type": "AWS::ApiGatewayV2::Stage",
     },
-    "StorageGitHubWebhookBackupPlanFF4D1592": {
+    "CustomDataApiGatewayApiKeyF93A24B8": {
       "Properties": {
-        "BackupPlan": {
-          "BackupPlanName": "github-webhook-daily-backup",
-          "BackupPlanRule": [
-            {
-              "Lifecycle": {
-                "DeleteAfterDays": 14,
-                "MoveToColdStorageAfterDays": 7,
-              },
-              "RuleName": "DailyBackup-3AM-JST",
-              "ScheduleExpression": "cron(0 18 ? * * *)",
-              "TargetBackupVault": {
-                "Fn::GetAtt": [
-                  "StorageGitHubWebhookBackupVault68AB98EA",
-                  "BackupVaultName",
-                ],
-              },
-            },
-          ],
-        },
+        "Enabled": true,
+        "Name": "custom-data-api-key-prod",
       },
-      "Type": "AWS::Backup::BackupPlan",
+      "Type": "AWS::ApiGateway::ApiKey",
     },
-    "StorageGitHubWebhookBackupPlanTimestreamSelection9590ABEA": {
+    "CustomDataApiGatewayCustomDataApiAccessLogsA2F1FBFD": {
+      "DeletionPolicy": "Retain",
       "Properties": {
-        "BackupPlanId": {
+        "RetentionInDays": 30,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "CustomDataApiGatewayRestApi1AC6E8D0": {
+      "Properties": {
+        "Description": "Write custom data sent by users to Timestream",
+        "Name": "Custom Data API",
+      },
+      "Type": "AWS::ApiGateway::RestApi",
+    },
+    "CustomDataApiGatewayRestApiAccount9921752C": {
+      "DeletionPolicy": "Retain",
+      "DependsOn": [
+        "CustomDataApiGatewayRestApi1AC6E8D0",
+      ],
+      "Properties": {
+        "CloudWatchRoleArn": {
           "Fn::GetAtt": [
-            "StorageGitHubWebhookBackupPlanFF4D1592",
-            "BackupPlanId",
+            "CustomDataApiGatewayRestApiCloudWatchRoleDDCE2D1C",
+            "Arn",
           ],
-        },
-        "BackupSelection": {
-          "IamRoleArn": {
-            "Fn::GetAtt": [
-              "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE",
-              "Arn",
-            ],
-          },
-          "Resources": [
-            "arn:aws:timestream:ap-northeast-1:123456789012:database/github_webhook_data",
-          ],
-          "SelectionName": "TimestreamSelection",
         },
       },
-      "Type": "AWS::Backup::BackupSelection",
+      "Type": "AWS::ApiGateway::Account",
+      "UpdateReplacePolicy": "Retain",
     },
-    "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE": {
+    "CustomDataApiGatewayRestApiCloudWatchRoleDDCE2D1C": {
+      "DeletionPolicy": "Retain",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Statement": [
@@ -318,7 +343,7 @@ exports[`Snapshot 1`] = `
               "Action": "sts:AssumeRole",
               "Effect": "Allow",
               "Principal": {
-                "Service": "backup.amazonaws.com",
+                "Service": "apigateway.amazonaws.com",
               },
             },
           ],
@@ -333,7 +358,351 @@ exports[`Snapshot 1`] = `
                 {
                   "Ref": "AWS::Partition",
                 },
-                ":iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "CustomDataApiGatewayRestApiDeployment8F97DD5Ba5bedd41810df347923a561fb6fc284a": {
+      "DependsOn": [
+        "CustomDataApiGatewayRestApidataOPTIONSB874BF2A",
+        "CustomDataApiGatewayRestApidataPOSTB3F218C0",
+        "CustomDataApiGatewayRestApidata95FF8C1D",
+        "CustomDataApiGatewayRestApiOPTIONSDAEEE50E",
+      ],
+      "Properties": {
+        "Description": "Write custom data sent by users to Timestream",
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Deployment",
+    },
+    "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9": {
+      "DependsOn": [
+        "CustomDataApiGatewayRestApiAccount9921752C",
+      ],
+      "Properties": {
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "CustomDataApiGatewayCustomDataApiAccessLogsA2F1FBFD",
+              "Arn",
+            ],
+          },
+          "Format": "{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","user":"$context.identity.user","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}",
+        },
+        "DeploymentId": {
+          "Ref": "CustomDataApiGatewayRestApiDeployment8F97DD5Ba5bedd41810df347923a561fb6fc284a",
+        },
+        "MethodSettings": [
+          {
+            "DataTraceEnabled": true,
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "MetricsEnabled": true,
+            "ResourcePath": "/*",
+          },
+        ],
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+        "StageName": "prod",
+      },
+      "Type": "AWS::ApiGateway::Stage",
+    },
+    "CustomDataApiGatewayRestApiOPTIONSDAEEE50E": {
+      "Properties": {
+        "ApiKeyRequired": false,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+              },
+              "StatusCode": "204",
+            },
+          ],
+          "RequestTemplates": {
+            "application/json": "{ statusCode: 200 }",
+          },
+          "Type": "MOCK",
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+            "StatusCode": "204",
+          },
+        ],
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "CustomDataApiGatewayRestApi1AC6E8D0",
+            "RootResourceId",
+          ],
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayRestApidata95FF8C1D": {
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "CustomDataApiGatewayRestApi1AC6E8D0",
+            "RootResourceId",
+          ],
+        },
+        "PathPart": "data",
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Resource",
+    },
+    "CustomDataApiGatewayRestApidataOPTIONSB874BF2A": {
+      "Properties": {
+        "ApiKeyRequired": false,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+              },
+              "StatusCode": "204",
+            },
+          ],
+          "RequestTemplates": {
+            "application/json": "{ statusCode: 200 }",
+          },
+          "Type": "MOCK",
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+            "StatusCode": "204",
+          },
+        ],
+        "ResourceId": {
+          "Ref": "CustomDataApiGatewayRestApidata95FF8C1D",
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayRestApidataPOSTApiPermissionTesttestCustomDataApiGatewayRestApiAA1E18C3POSTdata9587E8AC": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerA09DE41C",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+              },
+              "/test-invoke-stage/POST/data",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "CustomDataApiGatewayRestApidataPOSTApiPermissiontestCustomDataApiGatewayRestApiAA1E18C3POSTdataD63395BC": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerA09DE41C",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+              },
+              "/",
+              {
+                "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+              },
+              "/POST/data",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "CustomDataApiGatewayRestApidataPOSTB3F218C0": {
+      "Properties": {
+        "ApiKeyRequired": true,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "POST",
+        "Integration": {
+          "IntegrationHttpMethod": "POST",
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":apigateway:ap-northeast-1:lambda:path/2015-03-31/functions/",
+                {
+                  "Fn::GetAtt": [
+                    "CustomDataApiHandlerA09DE41C",
+                    "Arn",
+                  ],
+                },
+                "/invocations",
+              ],
+            ],
+          },
+        },
+        "ResourceId": {
+          "Ref": "CustomDataApiGatewayRestApidata95FF8C1D",
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayUsagePlanF78D020B": {
+      "Properties": {
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            "Stage": {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "Throttle": {},
+          },
+        ],
+        "Quota": {
+          "Limit": 1000,
+          "Period": "DAY",
+        },
+        "Throttle": {
+          "BurstLimit": 20,
+          "RateLimit": 10,
+        },
+        "UsagePlanName": "custom-data-api-usage-plan-prod",
+      },
+      "Type": "AWS::ApiGateway::UsagePlan",
+    },
+    "CustomDataApiGatewayUsagePlanUsagePlanKeyResourcetestCustomDataApiGatewayApiKey0DB99A513C2E3BE3": {
+      "Properties": {
+        "KeyId": {
+          "Ref": "CustomDataApiGatewayApiKeyF93A24B8",
+        },
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "CustomDataApiGatewayUsagePlanF78D020B",
+        },
+      },
+      "Type": "AWS::ApiGateway::UsagePlanKey",
+    },
+    "CustomDataApiHandlerA09DE41C": {
+      "DependsOn": [
+        "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3",
+        "CustomDataApiHandlerServiceRoleC670BA8A",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "f0e8067567dd7808290900b3baf36c9d6647b2786128b0cf7773e6d580e52607.zip",
+        },
+        "Environment": {
+          "Variables": {
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerServiceRoleC670BA8A",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomDataApiHandlerServiceRoleC670BA8A": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
               ],
             ],
           },
@@ -341,18 +710,321 @@ exports[`Snapshot 1`] = `
       },
       "Type": "AWS::IAM::Role",
     },
-    "StorageGitHubWebhookBackupVault68AB98EA": {
-      "DeletionPolicy": "Retain",
+    "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3": {
       "Properties": {
-        "BackupVaultName": "github-webhook-backup-vault",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3",
+        "Roles": [
+          {
+            "Ref": "CustomDataApiHandlerServiceRoleC670BA8A",
+          },
+        ],
       },
-      "Type": "AWS::Backup::BackupVault",
-      "UpdateReplacePolicy": "Retain",
+      "Type": "AWS::IAM::Policy",
     },
-    "StorageGitHubWebhookDatabase916D4ADC": {
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
+        },
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "StorageAthenaResultsBucket5A1DC446",
+              },
+              " S3 bucket.",
+            ],
+          ],
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 900,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "GitHubActivityTopicC8B749D9": {
+      "Properties": {
+        "DisplayName": "call-github-api",
+        "TopicName": "call-github-api",
+      },
+      "Type": "AWS::SNS::Topic",
+    },
+    "GitHubActivityTopicPolicyE927B5C8": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
+              },
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": {
+                "Ref": "GitHubActivityTopicC8B749D9",
+              },
+              "Sid": "AllowPublishThroughSSLOnly",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Topics": [
+          {
+            "Ref": "GitHubActivityTopicC8B749D9",
+          },
+        ],
+      },
+      "Type": "AWS::SNS::TopicPolicy",
+    },
+    "SnsHandler5E31DEC0": {
+      "DependsOn": [
+        "SnsHandlerServiceRoleDefaultPolicyECF678AC",
+        "SnsHandlerServiceRoleF6D1823E",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "1cd469827fa4f23fa29c210a276542b76e233cfe3e1f3c4d7bd7a9972eb1b2e7.zip",
+        },
+        "Description": "Processes messages from GitHub activity SNS topic",
+        "Environment": {
+          "Variables": {
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "SnsHandlerServiceRoleF6D1823E",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 30,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "SnsHandlerAllowInvoketestGitHubActivityTopic07C68FD00F3BCB18": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "SnsHandler5E31DEC0",
+            "Arn",
+          ],
+        },
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "GitHubActivityTopicC8B749D9",
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "SnsHandlerGitHubActivityTopic5C6A30DE": {
+      "Properties": {
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "SnsHandler5E31DEC0",
+            "Arn",
+          ],
+        },
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "GitHubActivityTopicC8B749D9",
+        },
+      },
+      "Type": "AWS::SNS::Subscription",
+    },
+    "SnsHandlerServiceRoleDefaultPolicyECF678AC": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ssm:DescribeParameters",
+                "ssm:GetParameters",
+                "ssm:GetParameter",
+                "ssm:GetParameterHistory",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ssm:ap-northeast-1:123456789012:parameter/github/metrics/github-token",
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "SnsHandlerServiceRoleDefaultPolicyECF678AC",
+        "Roles": [
+          {
+            "Ref": "SnsHandlerServiceRoleF6D1823E",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "SnsHandlerServiceRoleF6D1823E": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageAthenaResultsBucket5A1DC446": {
+      "DeletionPolicy": "Delete",
       "Metadata": {
         "cdk_nag": {
           "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
             {
               "id": "AwsSolutions-IAM4",
               "reason": "Managed policies are acceptable during the prototype phase",
@@ -361,22 +1033,221 @@ exports[`Snapshot 1`] = `
               "id": "AwsSolutions-IAM5",
               "reason": "Wildcard permissions are acceptable during the prototype phase",
             },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
           ],
         },
       },
       "Properties": {
-        "DatabaseName": "github_webhook_data",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "github-metrics-prod-athena-results",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 30,
+              "Id": "DeleteOldResults",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
       },
-      "Type": "AWS::Timestream::Database",
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
     },
-    "StorageGitHubWebhookTable62713D45": {
+    "StorageAthenaResultsBucketAutoDeleteObjectsCustomResource8F9DAA56": {
+      "DeletionPolicy": "Delete",
       "DependsOn": [
-        "StorageGitHubWebhookDatabase916D4ADC",
+        "StorageAthenaResultsBucketPolicyCBEE47B8",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "StorageAthenaResultsBucket5A1DC446",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "StorageAthenaResultsBucketPolicyCBEE47B8": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "StorageAthenaResultsBucket5A1DC446",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageAthenaResultsBucket5A1DC446",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageAthenaResultsBucket5A1DC446",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "StorageAthenaWorkgroupEE6A428D": {
+      "Properties": {
+        "Name": "github-metrics-prod",
+        "WorkGroupConfiguration": {
+          "EnforceWorkGroupConfiguration": true,
+          "ResultConfiguration": {
+            "EncryptionConfiguration": {
+              "EncryptionOption": "SSE_S3",
+            },
+            "OutputLocation": {
+              "Fn::Join": [
+                "",
+                [
+                  "s3://",
+                  {
+                    "Ref": "StorageAthenaResultsBucket5A1DC446",
+                  },
+                  "/",
+                ],
+              ],
+            },
+          },
+        },
+      },
+      "Type": "AWS::Athena::WorkGroup",
+    },
+    "StorageConsolidatedDataBucketBEE847DA": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
+              "id": "AwsSolutions-IAM4",
+              "reason": "Managed policies are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Wildcard permissions are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "prod-github-metrics-consolidated-webhook-data",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "GLACIER_IR",
+                  "TransitionInDays": 90,
+                },
+              ],
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "StorageConsolidationLambdaAC39657F": {
+      "DependsOn": [
+        "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0",
+        "StorageConsolidationLambdaServiceRoleDDAF7DF4",
       ],
       "Metadata": {
         "cdk_nag": {
           "rules_to_suppress": [
             {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
               "id": "AwsSolutions-IAM4",
               "reason": "Managed policies are acceptable during the prototype phase",
             },
@@ -384,18 +1255,274 @@ exports[`Snapshot 1`] = `
               "id": "AwsSolutions-IAM5",
               "reason": "Wildcard permissions are acceptable during the prototype phase",
             },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
           ],
         },
       },
       "Properties": {
-        "DatabaseName": "github_webhook_data",
-        "RetentionProperties": {
-          "magneticStoreRetentionPeriodInDays": "365",
-          "memoryStoreRetentionPeriodInHours": "24",
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "3ffc1ede55c40024a1a1bd4bed1fb1f5e792601132d631c9ea0e455086bbacc6.zip",
         },
-        "TableName": "github_events",
+        "Environment": {
+          "Variables": {
+            "CONSOLIDATED_DATA_BUCKET": {
+              "Ref": "StorageConsolidatedDataBucketBEE847DA",
+            },
+            "GLUE_DATABASE": "github_metrics_db",
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 3008,
+        "Role": {
+          "Fn::GetAtt": [
+            "StorageConsolidationLambdaServiceRoleDDAF7DF4",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs20.x",
+        "Timeout": 900,
       },
-      "Type": "AWS::Timestream::Table",
+      "Type": "AWS::Lambda::Function",
+    },
+    "StorageConsolidationLambdaServiceRoleDDAF7DF4": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageConsolidatedDataBucketBEE847DA",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageConsolidatedDataBucketBEE847DA",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "glue:CreateTable",
+                "glue:UpdateTable",
+                "glue:GetTable",
+                "glue:GetDatabase",
+                "glue:CreatePartition",
+                "glue:UpdatePartition",
+                "glue:GetPartition",
+                "glue:BatchCreatePartition",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                "arn:aws:glue:ap-northeast-1:123456789012:catalog",
+                "arn:aws:glue:ap-northeast-1:123456789012:database/github_metrics_db",
+                "arn:aws:glue:ap-northeast-1:123456789012:table/github_metrics_db/*",
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0",
+        "Roles": [
+          {
+            "Ref": "StorageConsolidationLambdaServiceRoleDDAF7DF4",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "StorageConsolidationSchedule16EBF2D0": {
+      "Properties": {
+        "ScheduleExpression": "cron(0 1 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "StorageConsolidationLambdaAC39657F",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "StorageConsolidationScheduleAllowEventRuletestStorageConsolidationLambdaFA199CC3B2755670": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "StorageConsolidationLambdaAC39657F",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "StorageConsolidationSchedule16EBF2D0",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "StorageGlueDatabase41461820": {
+      "Properties": {
+        "CatalogId": "123456789012",
+        "DatabaseInput": {
+          "Description": "Database for GitHub webhook analytics",
+          "Name": "github_metrics_db",
+        },
+      },
+      "Type": "AWS::Glue::Database",
+    },
+    "StorageRawDataBucket693FC2EF": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
+              "id": "AwsSolutions-IAM4",
+              "reason": "Managed policies are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Wildcard permissions are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "prod-github-metrics-raw-webhook-data",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 7,
+              "Id": "DeleteOldRawData",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
     },
     "WebhookHandler40BDAF19": {
       "DependsOn": [
@@ -405,12 +1532,16 @@ exports[`Snapshot 1`] = `
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
-          "S3Key": "9a7d14cc479c54bae0848f871ee893696311979bf3dcc1aaf06d539a5ff7fa9e.zip",
+          "S3Key": "c6e4f83070b03aa862d9a4aea0b40028349d4cf068188186e1d5621eb3af382f.zip",
         },
         "Environment": {
           "Variables": {
-            "TIMESTREAM_DATABASE_NAME": "github_webhook_data",
-            "TIMESTREAM_TABLE_NAME": "github_events",
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "GitHubActivityTopicC8B749D9",
+            },
           },
         },
         "Handler": "index.handler",
@@ -452,14 +1583,45 @@ exports[`Snapshot 1`] = `
               },
             },
             {
-              "Action": "timestream:*",
+              "Action": "sns:Publish",
               "Effect": "Allow",
-              "Resource": "*",
+              "Resource": {
+                "Ref": "GitHubActivityTopicC8B749D9",
+              },
             },
             {
-              "Action": "timestream:DescribeEndpoints",
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
               "Effect": "Allow",
-              "Resource": "*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
             },
           ],
           "Version": "2012-10-17",
@@ -568,16 +1730,49 @@ exports[`Snapshot 2`] = `
     },
   },
   "Outputs": {
-    "TimestreamDatabaseName": {
-      "Description": "Timestream database where GitHub webhook data is stored",
+    "CustomDataApiEndpoint": {
+      "Description": "Custom Data API endpoint",
       "Value": {
-        "Ref": "StorageGitHubWebhookDatabase916D4ADC",
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            ".execute-api.ap-northeast-1.",
+            {
+              "Ref": "AWS::URLSuffix",
+            },
+            "/",
+            {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "/",
+          ],
+        ],
       },
     },
-    "TimestreamTableName": {
-      "Description": "Timestream table where GitHub webhook data is stored",
+    "CustomDataApiGatewayRestApiEndpoint74A7CDCA": {
       "Value": {
-        "Ref": "StorageGitHubWebhookTable62713D45",
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            ".execute-api.ap-northeast-1.",
+            {
+              "Ref": "AWS::URLSuffix",
+            },
+            "/",
+            {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "/",
+          ],
+        ],
       },
     },
     "WebhookApiUrl": {
@@ -592,7 +1787,7 @@ exports[`Snapshot 2`] = `
                 "ApiEndpoint",
               ],
             },
-            "/v2/webhooks",
+            "/prod/webhooks",
           ],
         ],
       },
@@ -858,9 +2053,473 @@ exports[`Snapshot 2`] = `
           "ThrottlingBurstLimit": 100,
           "ThrottlingRateLimit": 50,
         },
-        "StageName": "v2",
+        "StageName": "prod",
       },
       "Type": "AWS::ApiGatewayV2::Stage",
+    },
+    "CustomDataApiGatewayApiKeyF93A24B8": {
+      "Properties": {
+        "Enabled": true,
+        "Name": "custom-data-api-key-dev",
+      },
+      "Type": "AWS::ApiGateway::ApiKey",
+    },
+    "CustomDataApiGatewayCustomDataApiAccessLogsA2F1FBFD": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "RetentionInDays": 30,
+      },
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "CustomDataApiGatewayRestApi1AC6E8D0": {
+      "Properties": {
+        "Description": "Write custom data sent by users to Timestream",
+        "Name": "Custom Data API",
+      },
+      "Type": "AWS::ApiGateway::RestApi",
+    },
+    "CustomDataApiGatewayRestApiAccount9921752C": {
+      "DeletionPolicy": "Retain",
+      "DependsOn": [
+        "CustomDataApiGatewayRestApi1AC6E8D0",
+      ],
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "CustomDataApiGatewayRestApiCloudWatchRoleDDCE2D1C",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::ApiGateway::Account",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "CustomDataApiGatewayRestApiCloudWatchRoleDDCE2D1C": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "CustomDataApiGatewayRestApiDeployment8F97DD5Ba5bedd41810df347923a561fb6fc284a": {
+      "DependsOn": [
+        "CustomDataApiGatewayRestApidataOPTIONSB874BF2A",
+        "CustomDataApiGatewayRestApidataPOSTB3F218C0",
+        "CustomDataApiGatewayRestApidata95FF8C1D",
+        "CustomDataApiGatewayRestApiOPTIONSDAEEE50E",
+      ],
+      "Properties": {
+        "Description": "Write custom data sent by users to Timestream",
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Deployment",
+    },
+    "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9": {
+      "DependsOn": [
+        "CustomDataApiGatewayRestApiAccount9921752C",
+      ],
+      "Properties": {
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "CustomDataApiGatewayCustomDataApiAccessLogsA2F1FBFD",
+              "Arn",
+            ],
+          },
+          "Format": "{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","user":"$context.identity.user","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}",
+        },
+        "DeploymentId": {
+          "Ref": "CustomDataApiGatewayRestApiDeployment8F97DD5Ba5bedd41810df347923a561fb6fc284a",
+        },
+        "MethodSettings": [
+          {
+            "DataTraceEnabled": true,
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "MetricsEnabled": true,
+            "ResourcePath": "/*",
+          },
+        ],
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+        "StageName": "prod",
+      },
+      "Type": "AWS::ApiGateway::Stage",
+    },
+    "CustomDataApiGatewayRestApiOPTIONSDAEEE50E": {
+      "Properties": {
+        "ApiKeyRequired": false,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+              },
+              "StatusCode": "204",
+            },
+          ],
+          "RequestTemplates": {
+            "application/json": "{ statusCode: 200 }",
+          },
+          "Type": "MOCK",
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+            "StatusCode": "204",
+          },
+        ],
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "CustomDataApiGatewayRestApi1AC6E8D0",
+            "RootResourceId",
+          ],
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayRestApidata95FF8C1D": {
+      "Properties": {
+        "ParentId": {
+          "Fn::GetAtt": [
+            "CustomDataApiGatewayRestApi1AC6E8D0",
+            "RootResourceId",
+          ],
+        },
+        "PathPart": "data",
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Resource",
+    },
+    "CustomDataApiGatewayRestApidataOPTIONSB874BF2A": {
+      "Properties": {
+        "ApiKeyRequired": false,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "IntegrationResponses": [
+            {
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+              },
+              "StatusCode": "204",
+            },
+          ],
+          "RequestTemplates": {
+            "application/json": "{ statusCode: 200 }",
+          },
+          "Type": "MOCK",
+        },
+        "MethodResponses": [
+          {
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+            "StatusCode": "204",
+          },
+        ],
+        "ResourceId": {
+          "Ref": "CustomDataApiGatewayRestApidata95FF8C1D",
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayRestApidataPOSTApiPermissionTesttestCustomDataApiGatewayRestApiAA1E18C3POSTdata9587E8AC": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerA09DE41C",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+              },
+              "/test-invoke-stage/POST/data",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "CustomDataApiGatewayRestApidataPOSTApiPermissiontestCustomDataApiGatewayRestApiAA1E18C3POSTdataD63395BC": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerA09DE41C",
+            "Arn",
+          ],
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":execute-api:ap-northeast-1:123456789012:",
+              {
+                "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+              },
+              "/",
+              {
+                "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+              },
+              "/POST/data",
+            ],
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "CustomDataApiGatewayRestApidataPOSTB3F218C0": {
+      "Properties": {
+        "ApiKeyRequired": true,
+        "AuthorizationType": "NONE",
+        "HttpMethod": "POST",
+        "Integration": {
+          "IntegrationHttpMethod": "POST",
+          "Type": "AWS_PROXY",
+          "Uri": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":apigateway:ap-northeast-1:lambda:path/2015-03-31/functions/",
+                {
+                  "Fn::GetAtt": [
+                    "CustomDataApiHandlerA09DE41C",
+                    "Arn",
+                  ],
+                },
+                "/invocations",
+              ],
+            ],
+          },
+        },
+        "ResourceId": {
+          "Ref": "CustomDataApiGatewayRestApidata95FF8C1D",
+        },
+        "RestApiId": {
+          "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+        },
+      },
+      "Type": "AWS::ApiGateway::Method",
+    },
+    "CustomDataApiGatewayUsagePlanF78D020B": {
+      "Properties": {
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "CustomDataApiGatewayRestApi1AC6E8D0",
+            },
+            "Stage": {
+              "Ref": "CustomDataApiGatewayRestApiDeploymentStageprod52483DB9",
+            },
+            "Throttle": {},
+          },
+        ],
+        "Quota": {
+          "Limit": 1000,
+          "Period": "DAY",
+        },
+        "Throttle": {
+          "BurstLimit": 20,
+          "RateLimit": 10,
+        },
+        "UsagePlanName": "custom-data-api-usage-plan-dev",
+      },
+      "Type": "AWS::ApiGateway::UsagePlan",
+    },
+    "CustomDataApiGatewayUsagePlanUsagePlanKeyResourcetestCustomDataApiGatewayApiKey0DB99A513C2E3BE3": {
+      "Properties": {
+        "KeyId": {
+          "Ref": "CustomDataApiGatewayApiKeyF93A24B8",
+        },
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "CustomDataApiGatewayUsagePlanF78D020B",
+        },
+      },
+      "Type": "AWS::ApiGateway::UsagePlanKey",
+    },
+    "CustomDataApiHandlerA09DE41C": {
+      "DependsOn": [
+        "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3",
+        "CustomDataApiHandlerServiceRoleC670BA8A",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "f0e8067567dd7808290900b3baf36c9d6647b2786128b0cf7773e6d580e52607.zip",
+        },
+        "Environment": {
+          "Variables": {
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomDataApiHandlerServiceRoleC670BA8A",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 10,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "CustomDataApiHandlerServiceRoleC670BA8A": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "CustomDataApiHandlerServiceRoleDefaultPolicy6F6D12B3",
+        "Roles": [
+          {
+            "Ref": "CustomDataApiHandlerServiceRoleC670BA8A",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
     },
     "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
       "DependsOn": [
@@ -877,7 +2536,7 @@ exports[`Snapshot 2`] = `
             [
               "Lambda function for auto-deleting objects in ",
               {
-                "Ref": "ApiGatewayApiGatewayAccessLogsBucketB1D5C7F7",
+                "Ref": "StorageAthenaResultsBucket5A1DC446",
               },
               " S3 bucket.",
             ],
@@ -891,7 +2550,7 @@ exports[`Snapshot 2`] = `
             "Arn",
           ],
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "nodejs22.x",
         "Timeout": 900,
       },
       "Type": "AWS::Lambda::Function",
@@ -918,54 +2577,176 @@ exports[`Snapshot 2`] = `
       },
       "Type": "AWS::IAM::Role",
     },
-    "StorageGitHubWebhookBackupPlanFF4D1592": {
+    "GitHubActivityTopicC8B749D9": {
       "Properties": {
-        "BackupPlan": {
-          "BackupPlanName": "github-webhook-daily-backup",
-          "BackupPlanRule": [
+        "DisplayName": "call-github-api",
+        "TopicName": "call-github-api",
+      },
+      "Type": "AWS::SNS::Topic",
+    },
+    "GitHubActivityTopicPolicyE927B5C8": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
             {
-              "Lifecycle": {
-                "DeleteAfterDays": 14,
-                "MoveToColdStorageAfterDays": 7,
+              "Action": "sns:Publish",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false",
+                },
               },
-              "RuleName": "DailyBackup-3AM-JST",
-              "ScheduleExpression": "cron(0 18 ? * * *)",
-              "TargetBackupVault": {
-                "Fn::GetAtt": [
-                  "StorageGitHubWebhookBackupVault68AB98EA",
-                  "BackupVaultName",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": {
+                "Ref": "GitHubActivityTopicC8B749D9",
+              },
+              "Sid": "AllowPublishThroughSSLOnly",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "Topics": [
+          {
+            "Ref": "GitHubActivityTopicC8B749D9",
+          },
+        ],
+      },
+      "Type": "AWS::SNS::TopicPolicy",
+    },
+    "SnsHandler5E31DEC0": {
+      "DependsOn": [
+        "SnsHandlerServiceRoleDefaultPolicyECF678AC",
+        "SnsHandlerServiceRoleF6D1823E",
+      ],
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "1cd469827fa4f23fa29c210a276542b76e233cfe3e1f3c4d7bd7a9972eb1b2e7.zip",
+        },
+        "Description": "Processes messages from GitHub activity SNS topic",
+        "Environment": {
+          "Variables": {
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "SnsHandlerServiceRoleF6D1823E",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs22.x",
+        "Timeout": 30,
+      },
+      "Type": "AWS::Lambda::Function",
+    },
+    "SnsHandlerAllowInvoketestGitHubActivityTopic07C68FD00F3BCB18": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "SnsHandler5E31DEC0",
+            "Arn",
+          ],
+        },
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "GitHubActivityTopicC8B749D9",
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "SnsHandlerGitHubActivityTopic5C6A30DE": {
+      "Properties": {
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "SnsHandler5E31DEC0",
+            "Arn",
+          ],
+        },
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "GitHubActivityTopicC8B749D9",
+        },
+      },
+      "Type": "AWS::SNS::Subscription",
+    },
+    "SnsHandlerServiceRoleDefaultPolicyECF678AC": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ssm:DescribeParameters",
+                "ssm:GetParameters",
+                "ssm:GetParameter",
+                "ssm:GetParameterHistory",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":ssm:ap-northeast-1:123456789012:parameter/github/metrics/github-token",
+                  ],
                 ],
               },
             },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
           ],
+          "Version": "2012-10-17",
         },
-      },
-      "Type": "AWS::Backup::BackupPlan",
-    },
-    "StorageGitHubWebhookBackupPlanTimestreamSelection9590ABEA": {
-      "Properties": {
-        "BackupPlanId": {
-          "Fn::GetAtt": [
-            "StorageGitHubWebhookBackupPlanFF4D1592",
-            "BackupPlanId",
-          ],
-        },
-        "BackupSelection": {
-          "IamRoleArn": {
-            "Fn::GetAtt": [
-              "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE",
-              "Arn",
-            ],
+        "PolicyName": "SnsHandlerServiceRoleDefaultPolicyECF678AC",
+        "Roles": [
+          {
+            "Ref": "SnsHandlerServiceRoleF6D1823E",
           },
-          "Resources": [
-            "arn:aws:timestream:ap-northeast-1:123456789012:database/github_webhook_data",
-          ],
-          "SelectionName": "TimestreamSelection",
-        },
+        ],
       },
-      "Type": "AWS::Backup::BackupSelection",
+      "Type": "AWS::IAM::Policy",
     },
-    "StorageGitHubWebhookBackupPlanTimestreamSelectionRoleCBDF0EDE": {
+    "SnsHandlerServiceRoleF6D1823E": {
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Statement": [
@@ -973,7 +2754,7 @@ exports[`Snapshot 2`] = `
               "Action": "sts:AssumeRole",
               "Effect": "Allow",
               "Principal": {
-                "Service": "backup.amazonaws.com",
+                "Service": "lambda.amazonaws.com",
               },
             },
           ],
@@ -988,7 +2769,7 @@ exports[`Snapshot 2`] = `
                 {
                   "Ref": "AWS::Partition",
                 },
-                ":iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
               ],
             ],
           },
@@ -996,18 +2777,15 @@ exports[`Snapshot 2`] = `
       },
       "Type": "AWS::IAM::Role",
     },
-    "StorageGitHubWebhookBackupVault68AB98EA": {
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "BackupVaultName": "github-webhook-backup-vault",
-      },
-      "Type": "AWS::Backup::BackupVault",
-      "UpdateReplacePolicy": "Retain",
-    },
-    "StorageGitHubWebhookDatabase916D4ADC": {
+    "StorageAthenaResultsBucket5A1DC446": {
+      "DeletionPolicy": "Delete",
       "Metadata": {
         "cdk_nag": {
           "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
             {
               "id": "AwsSolutions-IAM4",
               "reason": "Managed policies are acceptable during the prototype phase",
@@ -1016,22 +2794,221 @@ exports[`Snapshot 2`] = `
               "id": "AwsSolutions-IAM5",
               "reason": "Wildcard permissions are acceptable during the prototype phase",
             },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
           ],
         },
       },
       "Properties": {
-        "DatabaseName": "github_webhook_data",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "github-metrics-dev-athena-results",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 30,
+              "Id": "DeleteOldResults",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true",
+          },
+        ],
       },
-      "Type": "AWS::Timestream::Database",
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Delete",
     },
-    "StorageGitHubWebhookTable62713D45": {
+    "StorageAthenaResultsBucketAutoDeleteObjectsCustomResource8F9DAA56": {
+      "DeletionPolicy": "Delete",
       "DependsOn": [
-        "StorageGitHubWebhookDatabase916D4ADC",
+        "StorageAthenaResultsBucketPolicyCBEE47B8",
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "StorageAthenaResultsBucket5A1DC446",
+        },
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "Custom::S3AutoDeleteObjects",
+      "UpdateReplacePolicy": "Delete",
+    },
+    "StorageAthenaResultsBucketPolicyCBEE47B8": {
+      "Properties": {
+        "Bucket": {
+          "Ref": "StorageAthenaResultsBucket5A1DC446",
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn",
+                  ],
+                },
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageAthenaResultsBucket5A1DC446",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageAthenaResultsBucket5A1DC446",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::S3::BucketPolicy",
+    },
+    "StorageAthenaWorkgroupEE6A428D": {
+      "Properties": {
+        "Name": "github-metrics-dev",
+        "WorkGroupConfiguration": {
+          "EnforceWorkGroupConfiguration": true,
+          "ResultConfiguration": {
+            "EncryptionConfiguration": {
+              "EncryptionOption": "SSE_S3",
+            },
+            "OutputLocation": {
+              "Fn::Join": [
+                "",
+                [
+                  "s3://",
+                  {
+                    "Ref": "StorageAthenaResultsBucket5A1DC446",
+                  },
+                  "/",
+                ],
+              ],
+            },
+          },
+        },
+      },
+      "Type": "AWS::Athena::WorkGroup",
+    },
+    "StorageConsolidatedDataBucketBEE847DA": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
+              "id": "AwsSolutions-IAM4",
+              "reason": "Managed policies are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Wildcard permissions are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "dev-github-metrics-consolidated-webhook-data",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "GLACIER_IR",
+                  "TransitionInDays": 90,
+                },
+              ],
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
+    },
+    "StorageConsolidationLambdaAC39657F": {
+      "DependsOn": [
+        "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0",
+        "StorageConsolidationLambdaServiceRoleDDAF7DF4",
       ],
       "Metadata": {
         "cdk_nag": {
           "rules_to_suppress": [
             {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
               "id": "AwsSolutions-IAM4",
               "reason": "Managed policies are acceptable during the prototype phase",
             },
@@ -1039,18 +3016,274 @@ exports[`Snapshot 2`] = `
               "id": "AwsSolutions-IAM5",
               "reason": "Wildcard permissions are acceptable during the prototype phase",
             },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
           ],
         },
       },
       "Properties": {
-        "DatabaseName": "github_webhook_data",
-        "RetentionProperties": {
-          "magneticStoreRetentionPeriodInDays": "365",
-          "memoryStoreRetentionPeriodInHours": "24",
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
+          "S3Key": "3ffc1ede55c40024a1a1bd4bed1fb1f5e792601132d631c9ea0e455086bbacc6.zip",
         },
-        "TableName": "github_events",
+        "Environment": {
+          "Variables": {
+            "CONSOLIDATED_DATA_BUCKET": {
+              "Ref": "StorageConsolidatedDataBucketBEE847DA",
+            },
+            "GLUE_DATABASE": "github_metrics_db",
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+          },
+        },
+        "Handler": "index.handler",
+        "MemorySize": 3008,
+        "Role": {
+          "Fn::GetAtt": [
+            "StorageConsolidationLambdaServiceRoleDDAF7DF4",
+            "Arn",
+          ],
+        },
+        "Runtime": "nodejs20.x",
+        "Timeout": 900,
       },
-      "Type": "AWS::Timestream::Table",
+      "Type": "AWS::Lambda::Function",
+    },
+    "StorageConsolidationLambdaServiceRoleDDAF7DF4": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com",
+              },
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition",
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+              ],
+            ],
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Role",
+    },
+    "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0": {
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageConsolidatedDataBucketBEE847DA",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageConsolidatedDataBucketBEE847DA",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "glue:CreateTable",
+                "glue:UpdateTable",
+                "glue:GetTable",
+                "glue:GetDatabase",
+                "glue:CreatePartition",
+                "glue:UpdatePartition",
+                "glue:GetPartition",
+                "glue:BatchCreatePartition",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                "arn:aws:glue:ap-northeast-1:123456789012:catalog",
+                "arn:aws:glue:ap-northeast-1:123456789012:database/github_metrics_db",
+                "arn:aws:glue:ap-northeast-1:123456789012:table/github_metrics_db/*",
+              ],
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+        "PolicyName": "StorageConsolidationLambdaServiceRoleDefaultPolicyA169AFD0",
+        "Roles": [
+          {
+            "Ref": "StorageConsolidationLambdaServiceRoleDDAF7DF4",
+          },
+        ],
+      },
+      "Type": "AWS::IAM::Policy",
+    },
+    "StorageConsolidationSchedule16EBF2D0": {
+      "Properties": {
+        "ScheduleExpression": "cron(0 1 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "StorageConsolidationLambdaAC39657F",
+                "Arn",
+              ],
+            },
+            "Id": "Target0",
+          },
+        ],
+      },
+      "Type": "AWS::Events::Rule",
+    },
+    "StorageConsolidationScheduleAllowEventRuletestStorageConsolidationLambdaFA199CC3B2755670": {
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "StorageConsolidationLambdaAC39657F",
+            "Arn",
+          ],
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "StorageConsolidationSchedule16EBF2D0",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::Lambda::Permission",
+    },
+    "StorageGlueDatabase41461820": {
+      "Properties": {
+        "CatalogId": "123456789012",
+        "DatabaseInput": {
+          "Description": "Database for GitHub webhook analytics",
+          "Name": "github_metrics_db",
+        },
+      },
+      "Type": "AWS::Glue::Database",
+    },
+    "StorageRawDataBucket693FC2EF": {
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cdk_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "AwsSolutions-S1",
+              "reason": "Server access logging not required for prototype",
+            },
+            {
+              "id": "AwsSolutions-IAM4",
+              "reason": "Managed policies are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-IAM5",
+              "reason": "Wildcard permissions are acceptable during the prototype phase",
+            },
+            {
+              "id": "AwsSolutions-L1",
+              "reason": "Latest runtime version check can be ignored for prototype",
+            },
+          ],
+        },
+      },
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256",
+              },
+            },
+          ],
+        },
+        "BucketName": "dev-github-metrics-raw-webhook-data",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 7,
+              "Id": "DeleteOldRawData",
+              "Status": "Enabled",
+            },
+          ],
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true,
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled",
+        },
+      },
+      "Type": "AWS::S3::Bucket",
+      "UpdateReplacePolicy": "Retain",
     },
     "WebhookHandler40BDAF19": {
       "DependsOn": [
@@ -1060,12 +3293,16 @@ exports[`Snapshot 2`] = `
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-ap-northeast-1",
-          "S3Key": "9a7d14cc479c54bae0848f871ee893696311979bf3dcc1aaf06d539a5ff7fa9e.zip",
+          "S3Key": "c6e4f83070b03aa862d9a4aea0b40028349d4cf068188186e1d5621eb3af382f.zip",
         },
         "Environment": {
           "Variables": {
-            "TIMESTREAM_DATABASE_NAME": "github_webhook_data",
-            "TIMESTREAM_TABLE_NAME": "github_events",
+            "RAW_DATA_BUCKET": {
+              "Ref": "StorageRawDataBucket693FC2EF",
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "GitHubActivityTopicC8B749D9",
+            },
           },
         },
         "Handler": "index.handler",
@@ -1107,14 +3344,45 @@ exports[`Snapshot 2`] = `
               },
             },
             {
-              "Action": "timestream:*",
+              "Action": "sns:Publish",
               "Effect": "Allow",
-              "Resource": "*",
+              "Resource": {
+                "Ref": "GitHubActivityTopicC8B749D9",
+              },
             },
             {
-              "Action": "timestream:DescribeEndpoints",
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
               "Effect": "Allow",
-              "Resource": "*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "StorageRawDataBucket693FC2EF",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "StorageRawDataBucket693FC2EF",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
             },
           ],
           "Version": "2012-10-17",

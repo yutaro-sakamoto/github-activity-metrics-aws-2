@@ -1,1 +1,1 @@
-export type EnvName = "prod" | "dev";
+export type EnvName = 'prod' | 'dev';

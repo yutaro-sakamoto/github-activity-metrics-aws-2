@@ -1,26 +1,23 @@
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
-import {
-  TimestreamWriteClient,
-  WriteRecordsCommand,
-} from "@aws-sdk/client-timestream-write";
-import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { Webhooks } from "@octokit/webhooks";
-import ipRangeCheck from "ip-range-check";
-import { getMeasure } from "./measures";
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { Webhooks } from '@octokit/webhooks';
+import ipRangeCheck from 'ip-range-check';
+import { getMeasure } from './measures';
 
 // Define GitHub IP ranges
 const GITHUB_IP_RANGES = [
-  "192.30.252.0/22",
-  "185.199.108.0/22",
-  "140.82.112.0/20",
-  "143.55.64.0/20",
-  "2a0a:a440::/29",
-  "2606:50c0::/32",
+  '192.30.252.0/22',
+  '185.199.108.0/22',
+  '140.82.112.0/20',
+  '143.55.64.0/20',
+  '2a0a:a440::/29',
+  '2606:50c0::/32',
 ];
 
 // Initialize AWS SDK clients
 const ssmClient = new SSMClient();
-const timestreamClient = new TimestreamWriteClient();
+const s3Client = new S3Client();
 
 // Function to retrieve secret from SSM Parameter Store
 async function getSecretFromParameterStore(
@@ -36,93 +33,72 @@ async function getSecretFromParameterStore(
     const response = await ssmClient.send(command);
     return response.Parameter!.Value!;
   } catch (error) {
-    console.error("Error fetching parameter from SSM:", error);
+    console.error('Error fetching parameter from SSM:', error);
     throw error;
   }
 }
 
-// Function to send data to Timestream
-async function sendToTimestream(
+// Function to send data to S3
+async function sendToS3(
   data: any,
-  databaseName: string,
-  tableName: string,
+  bucketName: string,
 ) {
-  // Get current timestamp in milliseconds
-  const currentTime = Date.now().toString();
+  // Get current timestamp
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  const hour = String(now.getUTCHours()).padStart(2, '0');
+  const minute = String(now.getUTCMinutes()).padStart(2, '0');
+  const timestamp = now.toISOString();
 
-  // Create common dimensions (metadata)
-  const commonDimensions = [
-    { Name: "event_type", Value: data.event_type },
-    { Name: "delivery_id", Value: data.delivery_id },
-  ];
+  // Create structured data record
+  const structuredRecord = {
+    timestamp,
+    event_type: data.event_type,
+    delivery_id: data.delivery_id,
+    repository_id: data.repository?.id,
+    repository_name: data.repository?.name,
+    repository_full_name: data.repository?.full_name,
+    organization_id: data.organization?.id,
+    organization_login: data.organization?.login,
+    sender_id: data.sender?.id,
+    sender_login: data.sender?.login,
+    action: data.action,
+  };
 
-  // Add repository information if it exists
-  if (data.repository) {
-    commonDimensions.push(
-      { Name: "repository_id", Value: data.repository.id.toString() },
-      { Name: "repository_name", Value: data.repository.name },
-      { Name: "repository_full_name", Value: data.repository.full_name },
-    );
-  }
-
-  // Add organization information if it exists
-  if (data.organization) {
-    commonDimensions.push(
-      { Name: "organization_id", Value: data.organization.id.toString() },
-      { Name: "organization_login", Value: data.organization.login },
-    );
-  }
-
-  // Add sender information if it exists
-  if (data.sender) {
-    commonDimensions.push(
-      { Name: "sender_id", Value: data.sender.id.toString() },
-      { Name: "sender_login", Value: data.sender.login },
-    );
-  }
-
-  // Add action if it exists
-  if (data.action) {
-    commonDimensions.push({ Name: "action", Value: data.action });
-  }
-
+  // Add event-specific measures
   const measure = getMeasure(data.event_type, data.payload);
-  console.log("Measure:", measure);
+  console.log('Measure:', measure);
 
-  // Create records
-  const records =
-    "measureValue" in measure
-      ? [
-          {
-            Dimensions: commonDimensions,
-            MeasureName: measure.measureName,
-            MeasureValue: measure.measureValue,
-            MeasureValueType: measure.measureValueType,
-            Time: currentTime,
-          },
-        ]
-      : [
-          {
-            Dimensions: commonDimensions,
-            MeasureName: measure.measureName,
-            MeasureValues: measure.measureValues,
-            MeasureValueType: measure.measureValueType,
-            Time: currentTime,
-          },
-        ];
+  // Merge measure data into the record
+  if ('measureValue' in measure) {
+    structuredRecord[measure.measureName] = measure.measureValue;
+  } else if ('measureValues' in measure) {
+    // For multi-measure records, flatten the values
+    measure.measureValues.forEach((mv: any) => {
+      structuredRecord[mv.Name] = mv.Value;
+    });
+  }
+
+  // Create S3 key with partitioning by date and hour
+  // Format: event_type=<type>/year=<yyyy>/month=<mm>/day=<dd>/hour=<hh>/<timestamp>_<delivery_id>.json
+  const key = `event_type=${data.event_type}/year=${year}/month=${month}/day=${day}/hour=${hour}/${timestamp}_${data.delivery_id}.json`;
 
   try {
     const params = {
-      DatabaseName: databaseName,
-      TableName: tableName,
-      Records: records,
+      Bucket: bucketName,
+      Key: key,
+      Body: JSON.stringify(structuredRecord),
+      ContentType: 'application/json',
     };
 
-    const command = new WriteRecordsCommand(params);
-    const result = await timestreamClient.send(command);
+    const command = new PutObjectCommand(params);
+    const result = await s3Client.send(command);
+    console.log(`Successfully wrote to S3: ${key}`);
     return result;
   } catch (error) {
-    console.error("Error sending data to Timestream:", error);
+    console.error('Error sending data to S3:', error);
     throw error;
   }
 }
@@ -132,18 +108,18 @@ async function publishPullRequestEventToSnsTopic(
   data: any,
 ) {
   if (
-    "number" in data &&
-    "action" in data &&
-    "organization" in data &&
-    "login" in data.organization &&
-    "repository" in data &&
-    "name" in data.repository
+    'number' in data &&
+    'action' in data &&
+    'organization' in data &&
+    'login' in data.organization &&
+    'repository' in data &&
+    'name' in data.repository
   ) {
     const snsClient = new SNSClient({ region: process.env.AWS_REGION });
     const snsTopicArn = process.env.SNS_TOPIC_ARN;
     const snsMessage = {
       deliveryId: deriveryId,
-      eventType: "pull_request",
+      eventType: 'pull_request',
       action: data.action,
       number: data.number,
       organization: data.organization.login,
@@ -160,7 +136,7 @@ async function publishPullRequestEventToSnsTopic(
 
 // Main Lambda function handler
 export const handler = async (event: any) => {
-  console.log("Received webhook event");
+  console.log('Received webhook event');
 
   try {
     // Check source IP address
@@ -181,14 +157,14 @@ export const handler = async (event: any) => {
         return {
           statusCode: 403,
           body: JSON.stringify({
-            message: "Access denied: Source IP not allowed",
+            message: 'Access denied: Source IP not allowed',
           }),
         };
       }
 
       console.log(`Confirmed request from authorized GitHub IP: ${sourceIp}`);
     } else {
-      console.warn("Source IP could not be determined from the request");
+      console.warn('Source IP could not be determined from the request');
     }
 
     // Get request body and headers
@@ -198,29 +174,29 @@ export const handler = async (event: any) => {
 
     // If body is Base64 encoded, decode it
     if (isBase64Encoded && body) {
-      body = Buffer.from(body, "base64").toString("utf8");
-      console.log("Decoded Base64 body");
+      body = Buffer.from(body, 'base64').toString('utf8');
+      console.log('Decoded Base64 body');
     }
 
     // Get GitHub event type and delivery ID
-    const githubEvent = headers["X-GitHub-Event"] || headers["x-github-event"];
+    const githubEvent = headers['X-GitHub-Event'] || headers['x-github-event'];
     const githubDelivery =
-      headers["X-GitHub-Delivery"] || headers["x-github-delivery"];
+      headers['X-GitHub-Delivery'] || headers['x-github-delivery'];
     const signature =
-      headers["X-Hub-Signature-256"] || headers["x-hub-signature-256"];
+      headers['X-Hub-Signature-256'] || headers['x-hub-signature-256'];
 
     // Check if request body exists
     if (!body) {
-      console.error("No request body found");
+      console.error('No request body found');
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: "No request body provided" }),
+        body: JSON.stringify({ message: 'No request body provided' }),
       };
     }
 
     // Get secret from SSM Parameter Store
     const secretToken = await getSecretFromParameterStore(
-      "/github/metrics/secret-token",
+      '/github/metrics/secret-token',
     );
 
     // Create webhook instance with the secret
@@ -229,41 +205,41 @@ export const handler = async (event: any) => {
     });
 
     // Ensure body is a string for webhook verification
-    const bodyStr = typeof body === "string" ? body : JSON.stringify(body);
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
 
     // Verify GitHub webhook signature using @octokit/webhooks
     try {
       await webhooks.verify(bodyStr, signature);
     } catch (error) {
-      console.error("Invalid signature", error);
+      console.error('Invalid signature', error);
       return {
         statusCode: 401,
-        body: JSON.stringify({ message: "Invalid signature" }),
+        body: JSON.stringify({ message: 'Invalid signature' }),
       };
     }
 
     // Parse request body
     let parsedBody;
     try {
-      parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+      parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
     } catch (error) {
-      console.error("Error parsing body:", error, "Raw body:", body);
+      console.error('Error parsing body:', error, 'Raw body:', body);
       return {
         statusCode: 400,
         body: JSON.stringify({
-          message: "Invalid JSON body",
+          message: 'Invalid JSON body',
           error: (error as Error).message,
         }),
       };
     }
 
     // Publish pull request event to SNS topic
-    if (githubEvent === "pull_request") {
+    if (githubEvent === 'pull_request') {
       await publishPullRequestEventToSnsTopic(githubDelivery, parsedBody);
     }
 
     // Log metadata separately
-    console.log("GitHub Webhook received:", {
+    console.log('GitHub Webhook received:', {
       event_type: githubEvent,
       delivery_id: githubDelivery,
       repository: parsedBody.repository?.full_name,
@@ -276,52 +252,51 @@ export const handler = async (event: any) => {
       action: parsedBody.action,
       repository: parsedBody.repository
         ? {
-            id: parsedBody.repository.id,
-            name: parsedBody.repository.name,
-            full_name: parsedBody.repository.full_name,
-          }
+          id: parsedBody.repository.id,
+          name: parsedBody.repository.name,
+          full_name: parsedBody.repository.full_name,
+        }
         : null,
       organization: parsedBody.organization
         ? {
-            login: parsedBody.organization.login,
-            id: parsedBody.organization.id,
-          }
+          login: parsedBody.organization.login,
+          id: parsedBody.organization.id,
+        }
         : null,
       sender: parsedBody.sender
         ? {
-            login: parsedBody.sender.login,
-            id: parsedBody.sender.id,
-          }
+          login: parsedBody.sender.login,
+          id: parsedBody.sender.id,
+        }
         : null,
       event_type: githubEvent,
       delivery_id: githubDelivery,
       payload: parsedBody,
     };
 
-    // Send structured data to Timestream
-    await sendToTimestream(
+    // Send structured data to S3
+    await sendToS3(
       structuredData,
-      process.env.TIMESTREAM_DATABASE_NAME!,
-      process.env.TIMESTREAM_TABLE_NAME!,
+      process.env.RAW_DATA_BUCKET!,
     );
 
     // Return success response
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Webhook received and processed successfully",
+        message: 'Webhook received and processed successfully',
         eventType: githubEvent,
       }),
     };
   } catch (error: any) {
     // Log error
-    console.error("Error processing webhook:", error);
+    console.error('Error processing webhook:', error);
 
     // Return error response
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: "Error processing webhook",
+        message: 'Error processing webhook',
         error: error.message,
       }),
     };

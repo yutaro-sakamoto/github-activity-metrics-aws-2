@@ -1,7 +1,7 @@
-import { App, Aspects } from "aws-cdk-lib";
-import { AwsSolutionsChecks } from "cdk-nag";
-import { EnvName } from "./lib/envName";
-import { GitHubActivityMetricsStack } from "./stacks/github-activity-metrics-stack";
+import { App, Aspects } from 'aws-cdk-lib';
+import { AwsSolutionsChecks } from 'cdk-nag';
+import { EnvName } from './lib/envName';
+import { GitHubActivityMetricsStack } from './stacks/github-activity-metrics-stack';
 
 // Configure deployment environment - Get environment information from CDK CLI
 const devEnv = {
@@ -11,10 +11,10 @@ const devEnv = {
 
 // Initialize CDK application
 const app = new App();
-const envName: EnvName = app.node.tryGetContext("env") || "dev";
+const envName: EnvName = app.node.tryGetContext('env') || 'dev';
 
 // Create GitHub Activity Metrics stack
-new GitHubActivityMetricsStack(app, "github-activity-metrics-aws-dev", {
+new GitHubActivityMetricsStack(app, 'github-activity-metrics-aws-dev', {
   env: devEnv,
   envName,
 });
