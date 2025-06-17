@@ -42,7 +42,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.821.0",
+    "@aws-sdk/client-sns": "^3.830.0",
     "@aws-sdk/client-ssm": "^3.828.0",
     "@aws-sdk/client-timestream-write": "^3.821.0",
     "@octokit/rest": "^22.0.0",
