@@ -24,7 +24,7 @@
     "projen": "npx projen"
   },
   "devDependencies": {
-    "@stylistic/eslint-plugin": "^4",
+    "@stylistic/eslint-plugin": "^5",
     "@types/jest": "^29.5.14",
     "@types/node": "^24.0.3",
     "@typescript-eslint/eslint-plugin": "^8",
